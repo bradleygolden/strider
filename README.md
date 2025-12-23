@@ -95,17 +95,6 @@ Hooks can:
 - Short-circuit with cached responses (`{:halt, response}`)
 - Block requests with guardrails (`{:error, reason}`)
 
-### Providers
-
-The model uses `"provider:model"` format:
-
-```elixir
-"anthropic:claude-4-5-sonnet"
-"openai:gpt-4"
-"openrouter:anthropic/claude-4-5-sonnet"
-"amazon_bedrock:anthropic.claude-4-5-sonnet-20241022-v2:0"
-```
-
 ### BYOK (Bring Your Own Key)
 
 Pass API keys at runtime for multi-tenant applications:
