@@ -24,3 +24,7 @@ strider-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Fetched Hex documentation and packages
+/.hex-docs/
+/.hex-packages/

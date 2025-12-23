@@ -1,24 +1,21 @@
 # Strider
 
-A simple Elixir library for calling LLMs.
-
-Strider sits on top of libraries like [ReqLLM](https://github.com/bradleygolden/req_llm) and provides an agent layer - consistent interfaces for building loops that call LLMs. It doesn't replace these libraries, it builds on them.
+An agent framework for Elixir.
 
 ## Why?
 
-Agents are just loops. A loop that calls an LLM, gets a response, and decides what to do next.
+Agents are loops. A loop that calls an LLM, gets a response, and decides what to do next. Strider provides the primitives for building these loops.
 
 ## What Strider Does
 
 - Unified interface for LLM calls across any backend
-- Works with req_llm, langchain, baml_elixir, or whatever comes next
 - Conversation context management
 - Streaming support
-- Telemetry
+- Extensible hooks for middleware-like transformations (caching, guardrails, logging)
 
 ## What Strider Doesn't Do
 
-Tool calling isn't built in. Start with a simple LLM call. Add tool calling when you need it.
+Tool calling isn't built in. You decide how to parse responses and when to stop.
 
 ## Installation
 
@@ -33,7 +30,7 @@ end
 ## Usage
 
 ```elixir
-agent = Strider.Agent.new({:req_llm, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
   system_prompt: "You are a helpful assistant."
 )
 
@@ -64,6 +61,40 @@ Enum.each(stream, fn chunk ->
 end)
 ```
 
+### Hooks
+
+Hooks enable middleware-like transformations at each stage of agent execution:
+
+```elixir
+defmodule MyApp.LoggingHooks do
+  @behaviour Strider.Hooks
+
+  @impl true
+  def on_call_start(_agent, content, _context) do
+    Logger.info("LLM call started")
+    {:cont, content}  # pass through
+  end
+
+  @impl true
+  def on_call_end(_agent, response, _context) do
+    Logger.info("LLM call completed")
+    {:cont, response}  # pass through
+  end
+end
+
+# Use hooks
+agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
+  hooks: MyApp.LoggingHooks
+)
+```
+
+Hooks can:
+- Transform content before LLM call (`on_call_start`)
+- Transform messages at backend level (`on_backend_request`)
+- Transform responses after LLM call (`on_backend_response`, `on_call_end`)
+- Short-circuit with cached responses (`{:halt, response}`)
+- Block requests with guardrails (`{:error, reason}`)
+
 ### Providers
 
 The model uses `"provider:model"` format:
@@ -80,7 +111,7 @@ The model uses `"provider:model"` format:
 Pass API keys at runtime for multi-tenant applications:
 
 ```elixir
-agent = Strider.Agent.new({:req_llm, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
+agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
 ```
 
 ## The Loop
@@ -116,19 +147,32 @@ defmodule MyAgent do
 end
 ```
 
-Tool calling lives in your code. You decide how to parse responses and when to stop.
-
 ## Backends
 
-- `:req_llm` - Uses [ReqLLM](https://github.com/bradleygolden/req_llm)
+- `StriderReqLLM` - Multi-provider backend via [ReqLLM](https://github.com/bradleygolden/req_llm)
 - `:mock` - For testing
 
 Write your own by implementing `Strider.Backend`.
 
-## Philosophy
+## Ecosystem
 
-Built from experience shipping AI code to production. Simple loops with escape hatches.
+| Package | Description | Status |
+|---------|-------------|--------|
+| `strider` | Core agent framework | Development |
+| `strider_req_llm` | Multi-provider LLM backend via ReqLLM | Development |
+| `strider_telemetry` | Telemetry hooks for observability | Development |
+| `strider_schema` | Schema validation for structured outputs | Development |
+| `strider_prompt` | Pluggable prompt templates | Development |
+| `strider_sandbox` | Sandboxed code execution | Development |
+| `strider_sandbox_fly` | Fly.io sandbox adapter | Development |
+| `strider_studio` | Real-time observability UI | Development |
+
+**Status:**
+- **Development** - API may change, not recommended for production
+- **Alpha** - Feature-complete but API may change
+- **Beta** - API stable, ready for production testing
+- **Stable** - Production-ready
 
 ## License
 
-MIT
+Apache-2.0
