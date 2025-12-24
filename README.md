@@ -24,6 +24,7 @@ def deps do
   [
     {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "a1828c9"},
     {:plug, "~> 1.15"},    # optional, for Strider.Proxy
+    {:req, "~> 0.5"},      # optional, for Strider.Sandbox.Adapters.Fly
     {:req_llm, "~> 1.0"},  # optional, for Strider.Backends.ReqLLM
     {:solid, "~> 0.15"},   # optional, for Strider.Prompt.Solid
     {:zoi, "~> 0.7"}       # optional, for Strider.Schema.Zoi
@@ -151,9 +152,8 @@ Write your own by implementing `Strider.Backend`.
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `strider` | Core agent framework (includes ReqLLM backend, prompt templates, schema validation, HTTP proxy, sandbox execution) | Development |
+| `strider` | Core agent framework (includes ReqLLM backend, prompt templates, schema validation, HTTP proxy, sandbox execution, Fly.io adapter) | Development |
 | `strider_telemetry` | Telemetry hooks for observability | Development |
-| `strider_sandbox_fly` | Fly.io sandbox adapter | Development |
 | `strider_studio` | Real-time observability UI | Development |
 
 **Status:**
