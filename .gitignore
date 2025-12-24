@@ -28,3 +28,4 @@ strider-*.tar
 # Fetched Hex documentation and packages
 /.hex-docs/
 /.hex-packages/
+/.plans/
