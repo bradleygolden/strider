@@ -42,6 +42,7 @@ defmodule Strider.MixProject do
       {:req, "~> 0.5", optional: true},
       {:req_llm, "~> 1.0", optional: true},
       {:solid, "~> 0.15", optional: true},
+      {:telemetry, "~> 1.2", optional: true},
       {:zoi, "~> 0.7", optional: true},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
