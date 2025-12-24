@@ -86,8 +86,8 @@ defmodule Strider.Sandbox.Adapters.Docker do
   end
 
   @impl true
-  def get_url(container_id, port) do
-    {:ok, "http://#{container_id}:#{port}"}
+  def get_url(_container_id, port) do
+    {:ok, "http://localhost:#{port}"}
   end
 
   @impl true
