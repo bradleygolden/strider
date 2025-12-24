@@ -40,6 +40,7 @@ defmodule Strider.MixProject do
       {:jason, "~> 1.4"},
       {:req_llm, "~> 1.0", optional: true},
       {:solid, "~> 0.15", optional: true},
+      {:zoi, "~> 0.7", optional: true},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
