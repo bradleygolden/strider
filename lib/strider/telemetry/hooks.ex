@@ -33,21 +33,14 @@ if Code.ensure_loaded?(:telemetry) do
         %{agent: agent, prompt: prompt, context: context}
       )
 
-      # Store start time in process dictionary for duration calculation
-      Process.put(:strider_call_start, System.monotonic_time())
-
       {:cont, prompt}
     end
 
     @impl true
     def on_call_end(agent, response, context) do
-      start_time = Process.get(:strider_call_start, System.monotonic_time())
-      duration = System.monotonic_time() - start_time
-      Process.delete(:strider_call_start)
-
       :telemetry.execute(
         [:strider, :call, :stop],
-        %{duration: duration},
+        %{system_time: System.system_time()},
         %{agent: agent, response: response, context: context}
       )
 
@@ -56,8 +49,6 @@ if Code.ensure_loaded?(:telemetry) do
 
     @impl true
     def on_call_error(agent, error, context) do
-      Process.delete(:strider_call_start)
-
       :telemetry.execute(
         [:strider, :call, :error],
         %{system_time: System.system_time()},

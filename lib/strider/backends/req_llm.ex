@@ -189,8 +189,8 @@ if Code.ensure_loaded?(ReqLLM) do
 
     defp normalize_usage(usage) when is_map(usage) do
       %{
-        input_tokens: Map.get(usage, :input_tokens) || Map.get(usage, "input_tokens") || 0,
-        output_tokens: Map.get(usage, :output_tokens) || Map.get(usage, "output_tokens") || 0
+        input_tokens: Map.get(usage, :input_tokens, 0),
+        output_tokens: Map.get(usage, :output_tokens, 0)
       }
     end
 

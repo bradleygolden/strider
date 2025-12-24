@@ -114,10 +114,7 @@ defmodule Strider.Backends.Mock do
         Map.get(config, :response, "Mock response")
 
       responses when is_list(responses) ->
-        # Use process dictionary to track response index
-        index = Process.get(:mock_response_index, 0)
-        Process.put(:mock_response_index, index + 1)
-        Enum.at(responses, rem(index, length(responses)))
+        List.first(responses)
     end
   end
 
