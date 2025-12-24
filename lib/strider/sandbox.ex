@@ -31,8 +31,14 @@ defmodule Strider.Sandbox do
   """
 
   alias Strider.Sandbox.Instance
+  alias Strider.Sandbox.NDJSON
 
   @type backend :: {module(), map() | keyword()}
+  @type text_block :: %{type: :text, text: String.t()}
+  @type file_block ::
+          %{type: :file, media_type: String.t(), data: String.t()}
+          | %{type: :file, media_type: String.t(), text: String.t()}
+  @type prompt_content :: String.t() | [text_block() | file_block()]
 
   @doc """
   Creates a new sandbox using the specified adapter and configuration.
@@ -215,6 +221,105 @@ defmodule Strider.Sandbox do
         error -> {:halt, error}
       end
     end)
+  end
+
+  @doc """
+  Sends a prompt to the sandbox server and returns a stream of events.
+
+  The sandbox must be running a strider-sandbox compatible server that
+  accepts POST requests to `/prompt` and returns NDJSON events.
+
+  ## Options
+
+  - `:port` - The port the sandbox server is listening on (default: 4001)
+  - `:timeout` - Request timeout in milliseconds (default: 60_000)
+
+  ## Examples
+
+      {:ok, stream} = Strider.Sandbox.prompt(sandbox, "Hello")
+      Enum.each(stream, fn event -> IO.inspect(event) end)
+
+      # With content blocks for images/files
+      {:ok, stream} = Strider.Sandbox.prompt(sandbox, [
+        %{type: "text", text: "What's in this image?"},
+        %{type: "file", media_type: "image/png", data: Base.encode64(bytes)}
+      ])
+  """
+  @spec prompt(Instance.t(), prompt_content(), keyword()) ::
+          {:ok, Enumerable.t()} | {:error, term()}
+  def prompt(%Instance{} = sandbox, content, opts \\ []) do
+    port = Keyword.get(opts, :port, 4001)
+    timeout = Keyword.get(opts, :timeout, 60_000)
+
+    with {:ok, base_url} <- get_url(sandbox, port) do
+      url = "#{base_url}/prompt"
+      body = Jason.encode!(%{prompt: content, options: %{}})
+
+      stream =
+        Stream.resource(
+          fn -> start_prompt_request(url, body, timeout) end,
+          &receive_prompt_chunks/1,
+          &cleanup_prompt_request/1
+        )
+        |> NDJSON.stream()
+
+      {:ok, stream}
+    end
+  end
+
+  defp start_prompt_request(url, body, timeout) do
+    caller = self()
+    ref = make_ref()
+
+    pid =
+      spawn_link(fn ->
+        try do
+          Req.post!(url,
+            body: body,
+            headers: [{"content-type", "application/json"}],
+            into: fn {:data, data}, acc ->
+              send(caller, {ref, {:data, data}})
+              {:cont, acc}
+            end,
+            receive_timeout: timeout
+          )
+
+          send(caller, {ref, :done})
+        rescue
+          e -> send(caller, {ref, {:error, Exception.message(e)}})
+        end
+      end)
+
+    {ref, pid, timeout}
+  end
+
+  defp receive_prompt_chunks({ref, pid, timeout} = state) do
+    receive do
+      {^ref, {:data, data}} ->
+        {[data], state}
+
+      {^ref, :done} ->
+        {:halt, state}
+
+      {^ref, {:error, reason}} ->
+        raise "Prompt request failed: #{reason}"
+
+      {:EXIT, ^pid, reason} ->
+        raise "Prompt request process died: #{inspect(reason)}"
+    after
+      timeout ->
+        raise "Prompt request timed out"
+    end
+  end
+
+  defp cleanup_prompt_request({_ref, pid, _timeout}) do
+    Process.exit(pid, :kill)
+
+    receive do
+      {:EXIT, ^pid, _} -> :ok
+    after
+      100 -> :ok
+    end
   end
 
   defp normalize_config(config) when is_map(config), do: config
