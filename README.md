@@ -27,7 +27,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "3dede4e"},
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "61f6fa1"},
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
     {:req_llm, "~> 1.0"},    # optional, for Strider.Backends.ReqLLM
@@ -143,16 +143,16 @@ schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
 ### Sandbox Execution
 
 ```elixir
-# Docker
-{:ok, sandbox} = Strider.Sandbox.create(adapter: Strider.Sandbox.Adapters.Docker)
-{:ok, result} = Strider.Sandbox.exec(sandbox, "echo hello")
-Strider.Sandbox.terminate(sandbox)
+alias Strider.Sandbox.Adapters.Docker
 
-# Fly.io
-{:ok, sandbox} = Strider.Sandbox.create(
-  adapter: Strider.Sandbox.Adapters.Fly,
-  app_name: "my-sandbox-app"
-)
+{:ok, sandbox} = Strider.Sandbox.create({Docker, image: "node:22-slim"})
+{:ok, result} = Strider.Sandbox.exec(sandbox, "node --version")
+
+# File operations
+:ok = Strider.Sandbox.write_file(sandbox, "/app/main.js", "console.log('hello')")
+{:ok, content} = Strider.Sandbox.read_file(sandbox, "/app/main.js")
+
+Strider.Sandbox.terminate(sandbox)
 ```
 
 ### HTTP Proxy
