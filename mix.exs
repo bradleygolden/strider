@@ -38,6 +38,7 @@ defmodule Strider.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      {:plug, "~> 1.15", optional: true},
       {:req_llm, "~> 1.0", optional: true},
       {:solid, "~> 0.15", optional: true},
       {:zoi, "~> 0.7", optional: true},
