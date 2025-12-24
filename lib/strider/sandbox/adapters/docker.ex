@@ -86,6 +86,38 @@ defmodule Strider.Sandbox.Adapters.Docker do
     {:ok, "http://#{container_id}:#{port}"}
   end
 
+  @impl true
+  def read_file(container_id, path, opts) do
+    case exec(container_id, "base64 '#{escape_path(path)}'", opts) do
+      {:ok, %{exit_code: 0, stdout: encoded}} ->
+        case Base.decode64(String.trim(encoded)) do
+          {:ok, content} -> {:ok, content}
+          :error -> {:error, :invalid_base64}
+        end
+
+      {:ok, %{exit_code: _}} ->
+        {:error, :file_not_found}
+
+      error ->
+        error
+    end
+  end
+
+  @impl true
+  def write_file(container_id, path, content, opts) do
+    encoded = Base.encode64(content)
+    escaped_path = escape_path(path)
+
+    cmd =
+      "mkdir -p \"$(dirname '#{escaped_path}')\" && echo '#{encoded}' | base64 -d > '#{escaped_path}'"
+
+    case exec(container_id, cmd, opts) do
+      {:ok, %{exit_code: 0}} -> :ok
+      {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
+      error -> error
+    end
+  end
+
   # Private helpers
 
   defp generate_name do
@@ -134,4 +166,8 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   defp maybe_add(args, _flag, nil, _transform), do: args
   defp maybe_add(args, flag, value, transform), do: args ++ [flag, transform.(value)]
+
+  defp escape_path(path) do
+    String.replace(path, "'", "'\\''")
+  end
 end

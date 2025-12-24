@@ -15,6 +15,9 @@ defmodule Strider.Sandbox.Adapter do
   ## Optional Callbacks
 
   - `get_url/2` - Get URL for an exposed port
+  - `read_file/3` - Read file contents from sandbox
+  - `write_file/4` - Write file to sandbox
+  - `write_files/3` - Write multiple files to sandbox
 
   ## Example
 
@@ -87,5 +90,23 @@ defmodule Strider.Sandbox.Adapter do
   """
   @callback get_url(sandbox_id(), port :: integer()) :: {:ok, String.t()} | {:error, term()}
 
-  @optional_callbacks [get_url: 2]
+  @doc """
+  Reads file contents from the sandbox.
+  """
+  @callback read_file(sandbox_id(), path :: String.t(), opts()) ::
+              {:ok, binary()} | {:error, term()}
+
+  @doc """
+  Writes a file to the sandbox.
+  """
+  @callback write_file(sandbox_id(), path :: String.t(), content :: binary(), opts()) ::
+              :ok | {:error, term()}
+
+  @doc """
+  Writes multiple files to the sandbox.
+  """
+  @callback write_files(sandbox_id(), files :: [{String.t(), binary()}], opts()) ::
+              :ok | {:error, term()}
+
+  @optional_callbacks [get_url: 2, read_file: 3, write_file: 4, write_files: 3]
 end

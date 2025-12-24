@@ -118,4 +118,23 @@ defmodule Strider.Sandbox.Adapters.Test do
   def get_url(sandbox_id, port) do
     {:ok, "http://#{sandbox_id}:#{port}"}
   end
+
+  @impl true
+  def read_file(sandbox_id, path, _opts) do
+    Agent.get(__MODULE__, fn state ->
+      case get_in(state, [:sandboxes, sandbox_id, :files, path]) do
+        nil -> {:error, :file_not_found}
+        content -> {:ok, content}
+      end
+    end)
+  end
+
+  @impl true
+  def write_file(sandbox_id, path, content, _opts) do
+    Agent.update(__MODULE__, fn state ->
+      update_in(state, [:sandboxes, sandbox_id, :files], fn files ->
+        Map.put(files || %{}, path, content)
+      end)
+    end)
+  end
 end

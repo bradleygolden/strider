@@ -157,6 +157,66 @@ defmodule Strider.Sandbox do
     end
   end
 
+  @doc """
+  Reads a file from the sandbox.
+
+  ## Examples
+
+      {:ok, content} = Strider.Sandbox.read_file(sandbox, "/app/code.py")
+  """
+  @spec read_file(Instance.t(), String.t(), keyword()) :: {:ok, binary()} | {:error, term()}
+  def read_file(%Instance{} = sandbox, path, opts \\ []) do
+    if function_exported?(sandbox.adapter, :read_file, 3) do
+      sandbox.adapter.read_file(sandbox.id, path, opts)
+    else
+      {:error, :not_implemented}
+    end
+  end
+
+  @doc """
+  Writes a file to the sandbox.
+
+  ## Examples
+
+      :ok = Strider.Sandbox.write_file(sandbox, "/app/code.py", "print('hello')")
+  """
+  @spec write_file(Instance.t(), String.t(), binary(), keyword()) :: :ok | {:error, term()}
+  def write_file(%Instance{} = sandbox, path, content, opts \\ []) do
+    if function_exported?(sandbox.adapter, :write_file, 4) do
+      sandbox.adapter.write_file(sandbox.id, path, content, opts)
+    else
+      {:error, :not_implemented}
+    end
+  end
+
+  @doc """
+  Writes multiple files to the sandbox.
+
+  ## Examples
+
+      :ok = Strider.Sandbox.write_files(sandbox, [
+        {"/app/main.py", "import lib"},
+        {"/app/lib.py", "def foo(): pass"}
+      ])
+  """
+  @spec write_files(Instance.t(), [{String.t(), binary()}], keyword()) :: :ok | {:error, term()}
+  def write_files(%Instance{} = sandbox, files, opts \\ []) do
+    if function_exported?(sandbox.adapter, :write_files, 3) do
+      sandbox.adapter.write_files(sandbox.id, files, opts)
+    else
+      write_files_sequentially(sandbox, files, opts)
+    end
+  end
+
+  defp write_files_sequentially(sandbox, files, opts) do
+    Enum.reduce_while(files, :ok, fn {path, content}, :ok ->
+      case write_file(sandbox, path, content, opts) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
   defp normalize_config(config) when is_map(config), do: config
   defp normalize_config(config) when is_list(config), do: Map.new(config)
 end

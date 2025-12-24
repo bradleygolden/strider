@@ -168,6 +168,48 @@ if Code.ensure_loaded?(Req) do
     # Additional Fly-specific functions (not part of Adapter behaviour)
 
     @doc """
+    Reads a file from the Fly Machine using base64 encoding.
+    """
+    @impl true
+    def read_file(sandbox_id, path, opts) do
+      case exec(sandbox_id, "base64 '#{escape_path(path)}'", opts) do
+        {:ok, %{exit_code: 0, stdout: encoded}} ->
+          case Base.decode64(String.trim(encoded)) do
+            {:ok, content} -> {:ok, content}
+            :error -> {:error, :invalid_base64}
+          end
+
+        {:ok, %{exit_code: _, stderr: err}} ->
+          {:error, err}
+
+        {:ok, %{exit_code: _}} ->
+          {:error, :file_not_found}
+
+        error ->
+          error
+      end
+    end
+
+    @doc """
+    Writes a file to the Fly Machine using base64 encoding.
+    """
+    @impl true
+    def write_file(sandbox_id, path, content, opts) do
+      encoded = Base.encode64(content)
+      escaped_path = escape_path(path)
+
+      cmd =
+        "mkdir -p \"$(dirname '#{escaped_path}')\" && echo '#{encoded}' | base64 -d > '#{escaped_path}'"
+
+      case exec(sandbox_id, cmd, opts) do
+        {:ok, %{exit_code: 0}} -> :ok
+        {:ok, %{exit_code: _, stderr: err}} when err != "" -> {:error, err}
+        {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
+        error -> error
+      end
+    end
+
+    @doc """
     Stops a Fly Machine without destroying it.
 
     Useful for suspend/resume patterns to save costs.
@@ -255,6 +297,10 @@ if Code.ensure_loaded?(Req) do
         nil -> body
         region -> Map.put(body, :region, region)
       end
+    end
+
+    defp escape_path(path) do
+      String.replace(path, "'", "'\\''")
     end
   end
 end
