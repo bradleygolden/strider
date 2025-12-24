@@ -151,9 +151,8 @@ Write your own by implementing `Strider.Backend`.
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `strider` | Core agent framework (includes ReqLLM backend, prompt templates, schema validation, HTTP proxy) | Development |
+| `strider` | Core agent framework (includes ReqLLM backend, prompt templates, schema validation, HTTP proxy, sandbox execution) | Development |
 | `strider_telemetry` | Telemetry hooks for observability | Development |
-| `strider_sandbox` | Sandboxed code execution | Development |
 | `strider_sandbox_fly` | Fly.io sandbox adapter | Development |
 | `strider_studio` | Real-time observability UI | Development |
 
