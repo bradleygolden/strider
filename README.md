@@ -22,7 +22,8 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "adec1fb"}
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "REFPLACEHOLDER"},
+    {:req_llm, "~> 1.0"}  # for Strider.Backends.ReqLLM
   ]
 end
 ```
@@ -30,7 +31,7 @@ end
 ## Usage
 
 ```elixir
-agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
   system_prompt: "You are a helpful assistant."
 )
 
@@ -83,7 +84,7 @@ defmodule MyApp.LoggingHooks do
 end
 
 # Use hooks
-agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
   hooks: MyApp.LoggingHooks
 )
 ```
@@ -100,7 +101,7 @@ Hooks can:
 Pass API keys at runtime for multi-tenant applications:
 
 ```elixir
-agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
 ```
 
 ## The Loop
@@ -138,8 +139,8 @@ end
 
 ## Backends
 
-- `StriderReqLLM` - Multi-provider backend via [ReqLLM](https://github.com/bradleygolden/req_llm)
-- `:mock` - For testing
+- `Strider.Backends.ReqLLM` - Multi-provider backend via [ReqLLM](https://github.com/bradleygolden/req_llm) (requires `{:req_llm, "~> 1.0"}`)
+- `Strider.Backends.Mock` - For testing
 
 Write your own by implementing `Strider.Backend`.
 
@@ -147,8 +148,7 @@ Write your own by implementing `Strider.Backend`.
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `strider` | Core agent framework | Development |
-| `strider_req_llm` | Multi-provider LLM backend via ReqLLM | Development |
+| `strider` | Core agent framework (includes ReqLLM backend) | Development |
 | `strider_telemetry` | Telemetry hooks for observability | Development |
 | `strider_schema` | Schema validation for structured outputs | Development |
 | `strider_prompt` | Pluggable prompt templates | Development |
