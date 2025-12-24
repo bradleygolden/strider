@@ -4,7 +4,6 @@ if Code.ensure_loaded?(:telemetry) do
 
     alias Strider.{Agent, Context}
 
-    # Use ETS to track telemetry events across processes
     defmodule EventTracker do
       def start do
         if :ets.whereis(:telemetry_events) != :undefined do
@@ -88,7 +87,6 @@ if Code.ensure_loaded?(:telemetry) do
         assert EventTracker.has_event?([:strider, :stream, :start])
         assert EventTracker.has_event?([:strider, :backend, :request])
 
-        # Consume the stream
         _chunks = Enum.to_list(stream)
 
         assert EventTracker.has_event?([:strider, :stream, :chunk])

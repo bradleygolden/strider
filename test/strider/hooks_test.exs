@@ -3,7 +3,6 @@ defmodule Strider.HooksTest do
 
   alias Strider.{Agent, Context, Hooks, Response}
 
-  # Test hook module that tracks all invocations and returns {:cont, value}
   defmodule TrackingHooks do
     @behaviour Strider.Hooks
 
@@ -53,7 +52,6 @@ defmodule Strider.HooksTest do
     end
   end
 
-  # Partial hook module - only implements some callbacks
   defmodule PartialHooks do
     @behaviour Strider.Hooks
 
@@ -64,7 +62,6 @@ defmodule Strider.HooksTest do
     end
   end
 
-  # Hook that transforms content
   defmodule TransformingHooks do
     @behaviour Strider.Hooks
 
@@ -89,7 +86,6 @@ defmodule Strider.HooksTest do
     end
   end
 
-  # Hook that halts execution
   defmodule HaltingHooks do
     @behaviour Strider.Hooks
 
@@ -99,7 +95,6 @@ defmodule Strider.HooksTest do
     end
   end
 
-  # Hook that returns an error
   defmodule ErrorHooks do
     @behaviour Strider.Hooks
 
@@ -233,7 +228,6 @@ defmodule Strider.HooksTest do
 
       {:ok, _response, _context} = Strider.call(agent, "Hi!", context, hooks: TrackingHooks)
 
-      # Both should be invoked (agent hooks first, then call hooks)
       assert_received {:hook, :partial_call_start}
       assert_received {:hook, :on_call_start, _, _, _}
     end
@@ -268,9 +262,7 @@ defmodule Strider.HooksTest do
 
       {:ok, response, _context} = Strider.call(agent, "Hi!", context)
 
-      # Response should be modified by on_call_end
       assert response.content == "modified: Hello!"
-      # Metadata should be transformed by on_backend_response
       assert response.metadata[:transformed] == true
     end
   end
@@ -285,16 +277,13 @@ defmodule Strider.HooksTest do
       assert_received {:hook, :on_stream_start, ^agent, "Hi!", ^context}
       assert_received {:hook, :on_backend_request, _config, _messages}
 
-      # Consume the stream
       chunks = Enum.to_list(stream)
       assert length(chunks) == 3
 
-      # Should have received chunk hooks
       assert_received {:hook, :on_stream_chunk, ^agent, _, _}
       assert_received {:hook, :on_stream_chunk, ^agent, _, _}
       assert_received {:hook, :on_stream_chunk, ^agent, _, _}
 
-      # Should have received end hook
       assert_received {:hook, :on_stream_end, ^agent, ^context}
     end
   end

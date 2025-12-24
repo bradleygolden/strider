@@ -41,7 +41,7 @@ if Code.ensure_loaded?(Solid) do
 
       test "renders template with nested values" do
         {:ok, template} = PromptSolid.parse("Hello {{ user.name }}!")
-        # Solid requires string keys for nested access
+
         assert {:ok, "Hello Alice!"} =
                  PromptSolid.render(template, %{"user" => %{"name" => "Alice"}})
       end

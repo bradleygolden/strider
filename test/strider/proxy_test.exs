@@ -57,7 +57,6 @@ if Code.ensure_loaded?(Plug) do
             end
           )
 
-        # Just verify the function receives conn
         headers = config.request_headers.(conn(:post, "/v1/messages"))
         assert headers == [{"x-api-key", "test-key"}]
 

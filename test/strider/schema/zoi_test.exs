@@ -44,7 +44,6 @@ if Code.ensure_loaded?(Zoi) do
 
         json_schema = Schema.to_json_schema(schema)
 
-        # Zoi uses atom keys
         assert json_schema[:type] == :object
         assert json_schema[:properties][:name][:type] == :string
         assert json_schema[:properties][:active][:type] == :boolean
@@ -90,7 +89,6 @@ if Code.ensure_loaded?(Zoi) do
         {:ok, result} = Schema.parse(schema, %{required: "value"})
 
         assert result.required == "value"
-        # Optional fields not provided are not included in the result
         refute Map.has_key?(result, :optional)
       end
 

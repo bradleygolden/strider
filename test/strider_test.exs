@@ -60,7 +60,6 @@ defmodule StriderTest do
 
       assert response.content == "I see an image of a cat."
 
-      # Multi-modal content should be preserved in context
       messages = Context.to_messages(updated_context)
       assert Enum.at(messages, 0) == %{role: "user", content: multi_modal_content}
     end
@@ -92,7 +91,6 @@ defmodule StriderTest do
       assert length(chunks) == 4
       assert Enum.map(chunks, & &1.content) == ["Hello", " ", "world", "!"]
 
-      # User message should be added to context
       assert Context.message_count(updated_context) == 1
     end
 

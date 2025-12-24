@@ -36,7 +36,6 @@ if Code.ensure_loaded?(Solid) do
         {% endif %}
         """
 
-        # Solid requires string keys for nested access
         assert {:ok, with_user} =
                  PromptSolid.render(template, %{"user" => %{"name" => "Alice"}})
 
