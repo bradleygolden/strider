@@ -12,6 +12,11 @@ Agents are loops. A loop that calls an LLM, gets a response, and decides what to
 - Conversation context management
 - Streaming support
 - Extensible hooks for middleware-like transformations (caching, guardrails, logging)
+- Telemetry integration for observability
+- Prompt templates with Liquid syntax
+- Schema validation for structured outputs
+- Sandbox execution (Docker, Fly.io)
+- HTTP proxy for forwarding LLM API requests
 
 ## What Strider Doesn't Do
 
@@ -22,7 +27,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "f3e83d4"},
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "2941c7e"},
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
     {:req_llm, "~> 1.0"},    # optional, for Strider.Backends.ReqLLM
@@ -109,6 +114,56 @@ Pass API keys at runtime for multi-tenant applications:
 agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
 ```
 
+### Telemetry
+
+```elixir
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+  hooks: Strider.Telemetry.Hooks
+)
+```
+
+### Prompt Templates
+
+```elixir
+import Strider.Prompt.Sigils
+
+prompt = ~P"Hello {{ name }}!"
+{:ok, rendered} = Strider.Prompt.Solid.render(prompt, %{"name" => "Alice"})
+```
+
+### Schema Validation
+
+```elixir
+alias Strider.Schema.Zoi, as: Schema
+
+schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
+{:ok, result} = Schema.parse(schema, %{name: "Alice", age: 30})
+```
+
+### Sandbox Execution
+
+```elixir
+# Docker
+{:ok, sandbox} = Strider.Sandbox.create(adapter: Strider.Sandbox.Adapters.Docker)
+{:ok, result} = Strider.Sandbox.exec(sandbox, "echo hello")
+Strider.Sandbox.terminate(sandbox)
+
+# Fly.io
+{:ok, sandbox} = Strider.Sandbox.create(
+  adapter: Strider.Sandbox.Adapters.Fly,
+  app_name: "my-sandbox-app"
+)
+```
+
+### HTTP Proxy
+
+```elixir
+# In your router
+forward "/api/anthropic", Strider.Proxy,
+  target: "https://api.anthropic.com",
+  request_headers: [{"x-api-key", System.get_env("ANTHROPIC_API_KEY")}]
+```
+
 ## The Loop
 
 An agent loop is a recursive function:
@@ -153,8 +208,15 @@ Write your own by implementing `Strider.Backend`.
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `strider` | Core agent framework (includes ReqLLM backend, prompt templates, schema validation, HTTP proxy, sandbox execution, Fly.io adapter, telemetry hooks) | Development |
+| `strider` | Core agent framework (Elixir) | Development |
+| `strider-sandbox` | Sandbox runtime for Node.js containers (TypeScript) | Development |
 | `strider_studio` | Real-time observability UI | Development |
+
+Install the JS package via GitHub:
+
+```json
+"strider-sandbox": "github:bradleygolden/strider-sandbox"
+```
 
 **Status:**
 - **Development** - API may change, not recommended for production
