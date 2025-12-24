@@ -72,16 +72,29 @@ if Code.ensure_loaded?(ReqLLM) do
     alias Strider.Response
 
     @impl true
-    def call(config, messages, _opts) do
+    def call(config, messages, opts) do
       model = Map.fetch!(config, :model)
       options = build_options(config)
+      output_schema = Keyword.get(opts, :output_schema)
 
+      if output_schema do
+        call_with_schema(model, messages, output_schema, options)
+      else
+        call_text(model, messages, options)
+      end
+    end
+
+    defp call_text(model, messages, options) do
       case ReqLLM.generate_text(model, messages, options) do
-        {:ok, response} ->
-          {:ok, normalize_response(response, model)}
+        {:ok, response} -> {:ok, normalize_response(response, model)}
+        {:error, reason} -> {:error, reason}
+      end
+    end
 
-        {:error, reason} ->
-          {:error, reason}
+    defp call_with_schema(model, messages, output_schema, options) do
+      case ReqLLM.generate_object(model, messages, output_schema, options) do
+        {:ok, response} -> {:ok, normalize_object_response(response, model)}
+        {:error, reason} -> {:error, reason}
       end
     end
 
@@ -123,7 +136,7 @@ if Code.ensure_loaded?(ReqLLM) do
 
     defp build_options(config) do
       config
-      |> Map.take([:temperature, :max_tokens, :top_p, :stop])
+      |> Map.take([:temperature, :max_tokens, :top_p, :stop, :req_http_options])
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
       |> Enum.into([])
     end
@@ -135,6 +148,19 @@ if Code.ensure_loaded?(ReqLLM) do
 
       Response.new(
         content: content,
+        finish_reason: normalize_finish_reason(finish_reason),
+        usage: normalize_usage(usage),
+        metadata: build_metadata(response, model, finish_reason)
+      )
+    end
+
+    defp normalize_object_response(response, model) do
+      object = ReqLLM.Response.object(response)
+      usage = ReqLLM.Response.usage(response) || %{}
+      finish_reason = ReqLLM.Response.finish_reason(response)
+
+      Response.new(
+        content: object,
         finish_reason: normalize_finish_reason(finish_reason),
         usage: normalize_usage(usage),
         metadata: build_metadata(response, model, finish_reason)
