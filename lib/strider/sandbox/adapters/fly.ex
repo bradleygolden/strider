@@ -250,6 +250,51 @@ if Code.ensure_loaded?(Req) do
       )
     end
 
+    @doc """
+    Waits for sandbox to become ready using Fly's native wait API + health polling.
+
+    Phase 1: Waits for machine to reach "started" state via Fly API
+    Phase 2: Polls health endpoint until it responds with 200
+
+    ## Options
+      * `:port` - health check port (default: 4001)
+      * `:timeout` - max wait time in ms (default: 60_000)
+      * `:interval` - poll interval in ms (default: 2_000)
+      * `:api_token` - Fly API token (optional, uses FLY_API_TOKEN env var if not provided)
+    """
+    @impl true
+    def await_ready(sandbox_id, opts \\ []) do
+      timeout_sec = div(Keyword.get(opts, :timeout, 60_000), 1000)
+      port = Keyword.get(opts, :port, 4001)
+      interval = Keyword.get(opts, :interval, 2_000)
+      timeout_ms = Keyword.get(opts, :timeout, 60_000)
+
+      with {:ok, _} <- wait(sandbox_id, "started", Keyword.put(opts, :timeout, timeout_sec)),
+           {:ok, url} <- get_url(sandbox_id, port) do
+        poll_health("#{url}/health", timeout_ms, interval)
+      end
+    end
+
+    defp poll_health(url, timeout, interval) do
+      deadline = System.monotonic_time(:millisecond) + timeout
+      do_poll_health(url, deadline, interval)
+    end
+
+    defp do_poll_health(url, deadline, interval) do
+      if System.monotonic_time(:millisecond) > deadline do
+        {:error, :timeout}
+      else
+        case Req.get(url) do
+          {:ok, %{status: 200, body: body}} ->
+            {:ok, body}
+
+          _ ->
+            Process.sleep(interval)
+            do_poll_health(url, deadline, interval)
+        end
+      end
+    end
+
     # Private helpers
 
     defp parse_sandbox_id!(sandbox_id) do

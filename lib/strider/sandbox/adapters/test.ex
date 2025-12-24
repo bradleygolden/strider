@@ -137,4 +137,14 @@ defmodule Strider.Sandbox.Adapters.Test do
       end)
     end)
   end
+
+  @impl true
+  def await_ready(sandbox_id, _opts) do
+    {:ok,
+     %{
+       "status" => "ok",
+       "sandbox_id" => sandbox_id,
+       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
+     }}
+  end
 end

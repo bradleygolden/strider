@@ -108,5 +108,20 @@ defmodule Strider.Sandbox.Adapter do
   @callback write_files(sandbox_id(), files :: [{String.t(), binary()}], opts()) ::
               :ok | {:error, term()}
 
-  @optional_callbacks [get_url: 2, read_file: 3, write_file: 4, write_files: 3]
+  @doc """
+  Waits for sandbox to become ready.
+
+  Each adapter can implement its own readiness logic. For example:
+  - Fly adapter uses native machine wait API + health poll
+  - Docker adapter polls health endpoint
+  - Test adapter returns immediately
+
+  ## Options
+    * `:port` - health check port (default: 4001)
+    * `:timeout` - max wait time in ms (default: 60_000)
+    * `:interval` - poll interval in ms (default: 2_000)
+  """
+  @callback await_ready(sandbox_id(), opts()) :: {:ok, map()} | {:error, term()}
+
+  @optional_callbacks [get_url: 2, read_file: 3, write_file: 4, write_files: 3, await_ready: 2]
 end

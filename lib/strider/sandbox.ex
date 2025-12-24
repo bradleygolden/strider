@@ -224,6 +224,63 @@ defmodule Strider.Sandbox do
   end
 
   @doc """
+  Waits for sandbox to become ready.
+
+  Delegates to the adapter's `await_ready/2` if implemented.
+  Falls back to polling the health endpoint if not.
+
+  ## Options
+
+  - `:port` - health check port (default: 4001)
+  - `:timeout` - max wait time in ms (default: 60_000)
+  - `:interval` - poll interval in ms (default: 2_000)
+
+  ## Examples
+
+      {:ok, metadata} = Strider.Sandbox.await_ready(sandbox)
+      {:ok, metadata} = Strider.Sandbox.await_ready(sandbox, timeout: 30_000)
+  """
+  @spec await_ready(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def await_ready(%Instance{adapter: adapter} = sandbox, opts \\ []) do
+    if function_exported?(adapter, :await_ready, 2) do
+      adapter.await_ready(sandbox.id, opts)
+    else
+      poll_health_endpoint(sandbox, opts)
+    end
+  end
+
+  defp poll_health_endpoint(sandbox, opts) do
+    port = Keyword.get(opts, :port, 4001)
+    timeout = Keyword.get(opts, :timeout, 60_000)
+    interval = Keyword.get(opts, :interval, 2_000)
+
+    case get_url(sandbox, port) do
+      {:ok, url} -> poll_health("#{url}/health", timeout, interval)
+      {:error, _} = error -> error
+    end
+  end
+
+  defp poll_health(url, timeout, interval) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    do_poll_health(url, deadline, interval)
+  end
+
+  defp do_poll_health(url, deadline, interval) do
+    if System.monotonic_time(:millisecond) > deadline do
+      {:error, :timeout}
+    else
+      case Req.get(url) do
+        {:ok, %{status: 200, body: body}} ->
+          {:ok, body}
+
+        _ ->
+          Process.sleep(interval)
+          do_poll_health(url, deadline, interval)
+      end
+    end
+  end
+
+  @doc """
   Sends a prompt to the sandbox server and returns a stream of events.
 
   The sandbox must be running a strider-sandbox compatible server that
