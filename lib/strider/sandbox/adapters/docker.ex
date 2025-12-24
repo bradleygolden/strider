@@ -8,6 +8,10 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   - `:image` - Docker image to use (default: "ubuntu:22.04")
   - `:workdir` - Working directory in container (default: "/workspace")
+  - `:command` - Container command:
+    - `nil` (default) - Runs `tail -f /dev/null` to keep container alive
+    - `:default` - Uses image's default ENTRYPOINT/CMD
+    - `["cmd", "arg1", ...]` - Custom command list
   - `:memory_mb` - Memory limit in MB
   - `:cpu_cores` - CPU limit
   - `:pids_limit` - Max number of processes
@@ -131,7 +135,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
     |> add_mounts(config)
     |> add_ports(config)
     |> add_env_vars(config)
-    |> Kernel.++([image, "tail", "-f", "/dev/null"])
+    |> add_image_and_command(config, image)
   end
 
   defp add_resource_limits(args, config) do
@@ -162,6 +166,14 @@ defmodule Strider.Sandbox.Adapters.Docker do
     Enum.reduce(Map.get(config, :env, []), args, fn {k, v}, acc ->
       acc ++ ["-e", "#{k}=#{v}"]
     end)
+  end
+
+  defp add_image_and_command(args, config, image) do
+    case Map.get(config, :command) do
+      nil -> args ++ [image, "tail", "-f", "/dev/null"]
+      :default -> args ++ [image]
+      cmd when is_list(cmd) -> args ++ [image | cmd]
+    end
   end
 
   defp maybe_add(args, _flag, nil, _transform), do: args
