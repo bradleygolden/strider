@@ -22,7 +22,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "d25a44e"},
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "501b1a7"},
     {:req_llm, "~> 1.0"}  # for Strider.Backends.ReqLLM
   ]
 end
