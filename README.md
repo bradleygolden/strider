@@ -22,8 +22,9 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "fe66a04"},
-    {:req_llm, "~> 1.0"}  # for Strider.Backends.ReqLLM
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "REFPLACEHOLDER"},
+    {:req_llm, "~> 1.0"},  # for Strider.Backends.ReqLLM
+    {:solid, "~> 0.15"}    # for Strider.Prompt.Solid
   ]
 end
 ```
@@ -148,10 +149,9 @@ Write your own by implementing `Strider.Backend`.
 
 | Package | Description | Status |
 |---------|-------------|--------|
-| `strider` | Core agent framework (includes ReqLLM backend) | Development |
+| `strider` | Core agent framework (includes ReqLLM backend, prompt templates) | Development |
 | `strider_telemetry` | Telemetry hooks for observability | Development |
 | `strider_schema` | Schema validation for structured outputs | Development |
-| `strider_prompt` | Pluggable prompt templates | Development |
 | `strider_sandbox` | Sandboxed code execution | Development |
 | `strider_sandbox_fly` | Fly.io sandbox adapter | Development |
 | `strider_studio` | Real-time observability UI | Development |
