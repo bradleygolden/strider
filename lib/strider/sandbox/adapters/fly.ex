@@ -271,12 +271,13 @@ if Code.ensure_loaded?(Req) do
     """
     @impl true
     def await_ready(sandbox_id, metadata, opts \\ []) do
-      timeout_sec = div(Keyword.get(opts, :timeout, 60_000), 1000)
+      timeout_ms = Keyword.get(opts, :timeout, 60_000)
+      # Fly wait API has a max timeout of 60 seconds
+      wait_timeout_sec = min(div(timeout_ms, 1000), 60)
       port = Keyword.get(opts, :port, 4001)
       interval = Keyword.get(opts, :interval, 2_000)
-      timeout_ms = Keyword.get(opts, :timeout, 60_000)
 
-      with {:ok, _} <- wait(sandbox_id, "started", Keyword.put(opts, :timeout, timeout_sec)) do
+      with {:ok, _} <- wait(sandbox_id, "started", Keyword.put(opts, :timeout, wait_timeout_sec)) do
         health_url = build_health_url(sandbox_id, metadata, port)
         poll_health(health_url, timeout_ms, interval)
       end
