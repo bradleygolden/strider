@@ -50,15 +50,17 @@ defmodule Strider.Sandbox.Adapter do
 
   @type config :: map()
   @type sandbox_id :: String.t()
+  @type metadata :: map()
   @type command :: String.t()
   @type opts :: keyword()
 
   @doc """
   Creates a new sandbox with the given configuration.
 
-  Returns `{:ok, sandbox_id}` on success or `{:error, reason}` on failure.
+  Returns `{:ok, sandbox_id, metadata}` on success or `{:error, reason}` on failure.
+  The metadata map contains adapter-specific information (e.g., private_ip for Fly).
   """
-  @callback create(config()) :: {:ok, sandbox_id()} | {:error, term()}
+  @callback create(config()) :: {:ok, sandbox_id(), metadata()} | {:error, term()}
 
   @doc """
   Executes a command in the sandbox.
@@ -116,12 +118,15 @@ defmodule Strider.Sandbox.Adapter do
   - Docker adapter polls health endpoint
   - Test adapter returns immediately
 
+  The metadata parameter contains adapter-specific information from create/1
+  (e.g., private_ip for Fly adapter to enable fast health checks).
+
   ## Options
     * `:port` - health check port (default: 4001)
     * `:timeout` - max wait time in ms (default: 60_000)
     * `:interval` - poll interval in ms (default: 2_000)
   """
-  @callback await_ready(sandbox_id(), opts()) :: {:ok, map()} | {:error, term()}
+  @callback await_ready(sandbox_id(), metadata(), opts()) :: {:ok, map()} | {:error, term()}
 
-  @optional_callbacks [get_url: 2, read_file: 3, write_file: 4, write_files: 3, await_ready: 2]
+  @optional_callbacks [get_url: 2, read_file: 3, write_file: 4, write_files: 3, await_ready: 3]
 end

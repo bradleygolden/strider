@@ -82,7 +82,7 @@ defmodule Strider.Sandbox.Adapters.Test do
       put_in(state, [:sandboxes, id], %{config: config, status: :running, history: []})
     end)
 
-    {:ok, id}
+    {:ok, id, %{}}
   end
 
   @impl true
@@ -139,7 +139,7 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
-  def await_ready(sandbox_id, _opts) do
+  def await_ready(sandbox_id, _metadata, _opts) do
     {:ok,
      %{
        "status" => "ok",

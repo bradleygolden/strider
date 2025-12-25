@@ -59,7 +59,8 @@ if Code.ensure_loaded?(Req) do
     @doc """
     Creates a new Fly Machine sandbox.
 
-    Returns `{:ok, sandbox_id}` where sandbox_id is formatted as `"app_name:machine_id"`.
+    Returns `{:ok, sandbox_id, metadata}` where sandbox_id is formatted as `"app_name:machine_id"`
+    and metadata contains `private_ip` for fast health checks.
     """
     @impl true
     def create(config) do
@@ -84,8 +85,9 @@ if Code.ensure_loaded?(Req) do
         |> maybe_add_region(config)
 
       case Client.post("/apps/#{app_name}/machines", body, api_token) do
-        {:ok, %{"id" => machine_id}} ->
-          {:ok, "#{app_name}:#{machine_id}"}
+        {:ok, %{"id" => machine_id} = response} ->
+          metadata = %{private_ip: Map.get(response, "private_ip")}
+          {:ok, "#{app_name}:#{machine_id}", metadata}
 
         {:error, reason} ->
           {:error, reason}
@@ -258,6 +260,9 @@ if Code.ensure_loaded?(Req) do
     Phase 1: Waits for machine to reach "started" state via Fly API
     Phase 2: Polls health endpoint until it responds with 200
 
+    Uses private_ip from metadata when available for fast health checks,
+    falling back to DNS when private_ip is not available.
+
     ## Options
       * `:port` - health check port (default: 4001)
       * `:timeout` - max wait time in ms (default: 60_000)
@@ -265,16 +270,26 @@ if Code.ensure_loaded?(Req) do
       * `:api_token` - Fly API token (optional, uses FLY_API_TOKEN env var if not provided)
     """
     @impl true
-    def await_ready(sandbox_id, opts \\ []) do
+    def await_ready(sandbox_id, metadata, opts \\ []) do
       timeout_sec = div(Keyword.get(opts, :timeout, 60_000), 1000)
       port = Keyword.get(opts, :port, 4001)
       interval = Keyword.get(opts, :interval, 2_000)
       timeout_ms = Keyword.get(opts, :timeout, 60_000)
 
-      with {:ok, _} <- wait(sandbox_id, "started", Keyword.put(opts, :timeout, timeout_sec)),
-           {:ok, url} <- get_url(sandbox_id, port) do
-        poll_health("#{url}/health", timeout_ms, interval)
+      with {:ok, _} <- wait(sandbox_id, "started", Keyword.put(opts, :timeout, timeout_sec)) do
+        health_url = build_health_url(sandbox_id, metadata, port)
+        poll_health(health_url, timeout_ms, interval)
       end
+    end
+
+    defp build_health_url(_sandbox_id, %{private_ip: private_ip}, port)
+         when is_binary(private_ip) do
+      "http://[#{private_ip}]:#{port}/health"
+    end
+
+    defp build_health_url(sandbox_id, _metadata, port) do
+      {:ok, url} = get_url(sandbox_id, port)
+      "#{url}/health"
     end
 
     defp poll_health(url, timeout, interval) do

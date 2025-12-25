@@ -43,7 +43,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
     args = build_docker_args(container_name, config, image, workdir)
 
     case System.cmd("docker", ["run" | args], stderr_to_stdout: true) do
-      {_, 0} -> {:ok, container_name}
+      {_, 0} -> {:ok, container_name, %{}}
       {error, _} -> {:error, error}
     end
   end

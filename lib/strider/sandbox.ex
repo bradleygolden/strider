@@ -58,12 +58,13 @@ defmodule Strider.Sandbox do
     config_map = normalize_config(config)
 
     case adapter_module.create(config_map) do
-      {:ok, sandbox_id} ->
+      {:ok, sandbox_id, metadata} ->
         sandbox =
           Instance.new(%{
             id: sandbox_id,
             adapter: adapter_module,
-            config: config_map
+            config: config_map,
+            metadata: metadata
           })
 
         {:ok, sandbox}
@@ -84,12 +85,13 @@ defmodule Strider.Sandbox do
       sandbox = Strider.Sandbox.from_id(Docker, "strider-sandbox-abc123")
       {:ok, result} = Strider.Sandbox.exec(sandbox, "echo 'still here'")
   """
-  @spec from_id(module(), String.t(), map()) :: Instance.t()
-  def from_id(adapter_module, sandbox_id, config \\ %{}) do
+  @spec from_id(module(), String.t(), map(), map()) :: Instance.t()
+  def from_id(adapter_module, sandbox_id, config \\ %{}, metadata \\ %{}) do
     Instance.new(%{
       id: sandbox_id,
       adapter: adapter_module,
-      config: config
+      config: config,
+      metadata: metadata
     })
   end
 
@@ -226,7 +228,7 @@ defmodule Strider.Sandbox do
   @doc """
   Waits for sandbox to become ready.
 
-  Delegates to the adapter's `await_ready/2` if implemented.
+  Delegates to the adapter's `await_ready/3` if implemented.
   Falls back to polling the health endpoint if not.
 
   ## Options
@@ -242,8 +244,8 @@ defmodule Strider.Sandbox do
   """
   @spec await_ready(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def await_ready(%Instance{adapter: adapter} = sandbox, opts \\ []) do
-    if function_exported?(adapter, :await_ready, 2) do
-      adapter.await_ready(sandbox.id, opts)
+    if function_exported?(adapter, :await_ready, 3) do
+      adapter.await_ready(sandbox.id, sandbox.metadata, opts)
     else
       poll_health_endpoint(sandbox, opts)
     end
