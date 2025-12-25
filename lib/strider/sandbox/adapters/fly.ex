@@ -272,14 +272,33 @@ if Code.ensure_loaded?(Req) do
     @impl true
     def await_ready(sandbox_id, metadata, opts \\ []) do
       timeout_ms = Keyword.get(opts, :timeout, 60_000)
+      deadline = System.monotonic_time(:millisecond) + timeout_ms
       # Fly wait API has a max timeout of 60 seconds
       wait_timeout_sec = min(div(timeout_ms, 1000), 60)
       port = Keyword.get(opts, :port, 4001)
       interval = Keyword.get(opts, :interval, 2_000)
 
-      with {:ok, _} <- wait(sandbox_id, "started", Keyword.put(opts, :timeout, wait_timeout_sec)) do
-        health_url = build_health_url(sandbox_id, metadata, port)
-        poll_health(health_url, timeout_ms, interval)
+      # Wait for machine to start, but proceed to health polling even on timeout (408)
+      # since the machine may still become ready within our overall deadline
+      case wait(sandbox_id, "started", Keyword.put(opts, :timeout, wait_timeout_sec)) do
+        {:ok, _} ->
+          :ok
+
+        {:error, {:api_error, 408, _}} ->
+          # Wait timed out but machine may still start - continue to health polling
+          :ok
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+      |> case do
+        :ok ->
+          remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
+          health_url = build_health_url(sandbox_id, metadata, port)
+          poll_health(health_url, remaining_ms, interval)
+
+        error ->
+          error
       end
     end
 
