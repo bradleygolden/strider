@@ -310,7 +310,8 @@ defmodule Strider.Sandbox do
 
     with {:ok, base_url} <- get_url(sandbox, port) do
       url = "#{base_url}/prompt"
-      body = Jason.encode!(%{prompt: content, options: %{}})
+      custom_opts = Keyword.get(opts, :options, %{})
+      body = Jason.encode!(%{prompt: content, options: custom_opts})
 
       stream =
         Stream.resource(
