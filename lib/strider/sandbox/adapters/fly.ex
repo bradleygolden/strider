@@ -15,6 +15,7 @@ if Code.ensure_loaded?(Req) do
     - `:ports` - Ports to expose as list of integers
     - `:memory_mb` - Memory limit in MB (default: 256)
     - `:cpu` - CPU count (default: 1)
+    - `:cpu_kind` - CPU type, "shared" or "performance" (default: "shared")
 
     Fly-specific fields:
     - `:app_name` - Fly app name (required)
@@ -72,7 +73,8 @@ if Code.ensure_loaded?(Req) do
             env: build_env(config),
             guest: %{
               memory_mb: Map.get(config, :memory_mb, 256),
-              cpus: Map.get(config, :cpu, 1)
+              cpus: Map.get(config, :cpu, 1),
+              cpu_kind: Map.get(config, :cpu_kind, "shared")
             },
             services: build_services(Map.get(config, :ports, [])),
             auto_destroy: true,
