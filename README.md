@@ -215,7 +215,7 @@ Write your own by implementing `Strider.Backend`.
 Install the JS package via GitHub:
 
 ```json
-"strider-sandbox": "github:bradleygolden/strider-sandbox"
+"strider-sandbox": "github:bradleygolden/strider-sandbox#e841831"
 ```
 
 **Status:**
