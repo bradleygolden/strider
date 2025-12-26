@@ -95,11 +95,17 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     defp call_with_schema(model, messages, output_schema, options) do
-      case ReqLLM.generate_object(model, messages, output_schema, options) do
-        {:ok, response} -> {:ok, normalize_object_response(response, model)}
+      # Convert struct schemas to object schemas for LLM (struct schemas can't be JSON encoded)
+      llm_schema = to_llm_schema(output_schema)
+
+      case ReqLLM.generate_object(model, messages, llm_schema, options) do
+        {:ok, response} -> {:ok, normalize_object_response(response, model, output_schema)}
         {:error, reason} -> {:error, reason}
       end
     end
+
+    defp to_llm_schema(%Zoi.Types.Struct{fields: fields}), do: Zoi.object(fields)
+    defp to_llm_schema(schema), do: schema
 
     @impl true
     def stream(config, messages, _opts) do
@@ -158,18 +164,28 @@ if Code.ensure_loaded?(ReqLLM) do
       )
     end
 
-    defp normalize_object_response(response, model) do
+    defp normalize_object_response(response, model, output_schema) do
       object = ReqLLM.Response.object(response)
+      content = maybe_parse_struct(output_schema, object)
       usage = ReqLLM.Response.usage(response) || %{}
       finish_reason = ReqLLM.Response.finish_reason(response)
 
       Response.new(
-        content: object,
+        content: content,
         finish_reason: normalize_finish_reason(finish_reason),
         usage: normalize_usage(usage),
         metadata: build_metadata(response, model, finish_reason)
       )
     end
+
+    defp maybe_parse_struct(%Zoi.Types.Struct{} = schema, object) when is_map(object) do
+      case Zoi.parse(schema, object) do
+        {:ok, struct} -> struct
+        {:error, _} -> object
+      end
+    end
+
+    defp maybe_parse_struct(_schema, object), do: object
 
     defp build_metadata(response, model, raw_finish_reason) do
       {provider, model_name} = parse_model_string(model)

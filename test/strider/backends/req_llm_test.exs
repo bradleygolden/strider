@@ -1,8 +1,14 @@
+defmodule Strider.Backends.ReqLLMTest.TestPerson do
+  @derive Jason.Encoder
+  defstruct [:name, :age]
+end
+
 if Code.ensure_loaded?(ReqLLM) do
   defmodule Strider.Backends.ReqLLMTest do
     use ExUnit.Case, async: true
 
     alias Strider.Backends.ReqLLM
+    alias Strider.Backends.ReqLLMTest.TestPerson
     alias Strider.{Content, Message}
 
     describe "Strider.Backends.ReqLLM" do
@@ -78,6 +84,21 @@ if Code.ensure_loaded?(ReqLLM) do
         assert response.finish_reason in [:tool_use, :tool_calls]
         assert response.usage.input_tokens == 10
         assert response.usage.output_tokens == 20
+      end
+
+      test "returns struct when output_schema is Zoi.struct with coerce: true" do
+        config = %{
+          model: "anthropic:claude-sonnet-4-20250514",
+          req_http_options: [plug: {Req.Test, __MODULE__}]
+        }
+
+        messages = [Message.new(:user, "Generate a person")]
+
+        output_schema =
+          Zoi.struct(TestPerson, %{name: Zoi.string(), age: Zoi.integer()}, coerce: true)
+
+        assert {:ok, response} = ReqLLM.call(config, messages, output_schema: output_schema)
+        assert %TestPerson{name: "Alice", age: 30} = response.content
       end
 
       test "returns text content when output_schema is not provided" do
