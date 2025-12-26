@@ -30,6 +30,7 @@ defmodule Strider.Sandbox do
   Custom adapters can be created by implementing the `Strider.Sandbox.Adapter` behaviour.
   """
 
+  alias Strider.Sandbox.HealthPoller
   alias Strider.Sandbox.Instance
   alias Strider.Sandbox.NDJSON
 
@@ -309,32 +310,10 @@ defmodule Strider.Sandbox do
 
   defp poll_health_endpoint(sandbox, opts) do
     port = Keyword.get(opts, :port, 4001)
-    timeout = Keyword.get(opts, :timeout, 60_000)
-    interval = Keyword.get(opts, :interval, 2_000)
 
     case get_url(sandbox, port) do
-      {:ok, url} -> poll_health("#{url}/health", timeout, interval)
+      {:ok, url} -> HealthPoller.poll("#{url}/health", opts)
       {:error, _} = error -> error
-    end
-  end
-
-  defp poll_health(url, timeout, interval) do
-    deadline = System.monotonic_time(:millisecond) + timeout
-    do_poll_health(url, deadline, interval)
-  end
-
-  defp do_poll_health(url, deadline, interval) do
-    if System.monotonic_time(:millisecond) > deadline do
-      {:error, :timeout}
-    else
-      case Req.get(url) do
-        {:ok, %{status: 200, body: body}} ->
-          {:ok, body}
-
-        _ ->
-          Process.sleep(interval)
-          do_poll_health(url, deadline, interval)
-      end
     end
   end
 

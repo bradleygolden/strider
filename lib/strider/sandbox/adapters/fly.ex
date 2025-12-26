@@ -55,6 +55,7 @@ if Code.ensure_loaded?(Req) do
 
     alias Strider.Sandbox.Adapters.Fly.Client
     alias Strider.Sandbox.ExecResult
+    alias Strider.Sandbox.HealthPoller
 
     @doc """
     Creates a new Fly Machine sandbox.
@@ -325,7 +326,7 @@ if Code.ensure_loaded?(Req) do
         :ok ->
           remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
           health_url = build_health_url(sandbox_id, metadata, port)
-          poll_health(health_url, remaining_ms, interval)
+          HealthPoller.poll(health_url, timeout: remaining_ms, interval: interval)
 
         error ->
           error
@@ -340,26 +341,6 @@ if Code.ensure_loaded?(Req) do
     defp build_health_url(sandbox_id, _metadata, port) do
       {:ok, url} = get_url(sandbox_id, port)
       "#{url}/health"
-    end
-
-    defp poll_health(url, timeout, interval) do
-      deadline = System.monotonic_time(:millisecond) + timeout
-      do_poll_health(url, deadline, interval)
-    end
-
-    defp do_poll_health(url, deadline, interval) do
-      if System.monotonic_time(:millisecond) > deadline do
-        {:error, :timeout}
-      else
-        case Req.get(url) do
-          {:ok, %{status: 200, body: body}} ->
-            {:ok, body}
-
-          _ ->
-            Process.sleep(interval)
-            do_poll_health(url, deadline, interval)
-        end
-      end
     end
 
     # Private helpers

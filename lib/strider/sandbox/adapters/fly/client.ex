@@ -3,8 +3,8 @@ if Code.ensure_loaded?(Req) do
     @moduledoc """
     HTTP client for the Fly Machines API.
 
-    Handles authentication, request formatting, and retry logic with backoff
-    for rate limits.
+    Uses a token bucket rate limiter to proactively enforce rate limits
+    and prevent 429 responses.
 
     ## Rate Limits
 
@@ -13,17 +13,20 @@ if Code.ensure_loaded?(Req) do
     - 3 req/s burst
     - 5 req/s for GET machine (10 burst)
 
-    This client implements retry with exponential backoff for 429 responses.
+    The rate limiter handles throttling. Retry logic is kept as a safety net
+    for transient 429s that slip through.
     """
+
+    alias Strider.Sandbox.Adapters.Fly.RateLimiter
 
     @base_url "https://api.machines.dev/v1"
     @max_retries 3
-    @base_delay_ms 1000
 
     @doc """
     Makes a GET request to the Fly Machines API.
     """
     def get(path, api_token) do
+      :ok = RateLimiter.acquire(:read)
       request(:get, path, nil, api_token)
     end
 
@@ -31,6 +34,7 @@ if Code.ensure_loaded?(Req) do
     Makes a POST request to the Fly Machines API.
     """
     def post(path, body, api_token) do
+      :ok = RateLimiter.acquire(:mutation)
       request(:post, path, body, api_token)
     end
 
@@ -38,6 +42,7 @@ if Code.ensure_loaded?(Req) do
     Makes a DELETE request to the Fly Machines API.
     """
     def delete(path, api_token) do
+      :ok = RateLimiter.acquire(:mutation)
       request(:delete, path, nil, api_token)
     end
 
@@ -65,8 +70,7 @@ if Code.ensure_loaded?(Req) do
           {:error, :not_found}
 
         {:ok, %{status: 429}} when retry_count < @max_retries ->
-          delay = (@base_delay_ms * :math.pow(2, retry_count)) |> round()
-          Process.sleep(delay)
+          # Rate limiter will naturally throttle the retry
           request(method, path, body, api_token, retry_count + 1)
 
         {:ok, %{status: 429}} ->
