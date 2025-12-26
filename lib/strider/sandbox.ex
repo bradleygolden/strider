@@ -158,9 +158,11 @@ defmodule Strider.Sandbox do
       # => "http://strider-sandbox-abc123:4000"
   """
   @spec get_url(Instance.t(), integer()) :: {:ok, String.t()} | {:error, term()}
-  def get_url(%Instance{} = sandbox, port) do
+  def get_url(%Instance{metadata: metadata} = sandbox, port) do
+    resolved_port = get_in(metadata, [:port_map, port]) || port
+
     if function_exported?(sandbox.adapter, :get_url, 2) do
-      sandbox.adapter.get_url(sandbox.id, port)
+      sandbox.adapter.get_url(sandbox.id, resolved_port)
     else
       {:error, :not_implemented}
     end

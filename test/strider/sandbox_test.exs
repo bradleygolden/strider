@@ -115,5 +115,31 @@ defmodule Strider.SandboxTest do
 
       assert url == "http://#{sandbox.id}:4000"
     end
+
+    test "resolves container port to host port when port_map exists" do
+      sandbox =
+        Sandbox.from_id(TestAdapter, "test-sandbox", %{}, %{port_map: %{4001 => 8080}})
+
+      {:ok, url} = Sandbox.get_url(sandbox, 4001)
+
+      assert url == "http://test-sandbox:8080"
+    end
+
+    test "uses original port when no mapping exists for the port" do
+      sandbox =
+        Sandbox.from_id(TestAdapter, "test-sandbox", %{}, %{port_map: %{4001 => 8080}})
+
+      {:ok, url} = Sandbox.get_url(sandbox, 3000)
+
+      assert url == "http://test-sandbox:3000"
+    end
+
+    test "uses original port when port_map is empty" do
+      sandbox = Sandbox.from_id(TestAdapter, "test-sandbox", %{}, %{port_map: %{}})
+
+      {:ok, url} = Sandbox.get_url(sandbox, 4001)
+
+      assert url == "http://test-sandbox:4001"
+    end
   end
 end

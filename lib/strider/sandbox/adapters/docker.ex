@@ -42,8 +42,13 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
     args = build_docker_args(container_name, config, image, workdir)
 
+    port_map =
+      config
+      |> Map.get(:ports, [])
+      |> Map.new(fn {host_port, container_port} -> {container_port, host_port} end)
+
     case System.cmd("docker", ["run" | args], stderr_to_stdout: true) do
-      {_, 0} -> {:ok, container_name, %{}}
+      {_, 0} -> {:ok, container_name, %{port_map: port_map}}
       {error, _} -> {:error, error}
     end
   end
