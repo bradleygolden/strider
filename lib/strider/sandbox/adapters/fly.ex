@@ -21,6 +21,8 @@ if Code.ensure_loaded?(Req) do
     - `:app_name` - Fly app name (required)
     - `:region` - Fly region (optional, defaults to closest)
     - `:api_token` - API token (optional, defaults to FLY_API_TOKEN env var)
+    - `:skip_launch` - Skip starting the machine (default: false). When true, machine
+      is created but not started, enabling "warm pool" patterns for fast on-demand starts.
 
     ## Usage
 
@@ -70,6 +72,7 @@ if Code.ensure_loaded?(Req) do
 
       body =
         %{
+          skip_launch: Map.get(config, :skip_launch, false),
           config: %{
             image: Map.fetch!(config, :image),
             env: build_env(config),
