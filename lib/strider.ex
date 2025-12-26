@@ -109,9 +109,11 @@ defmodule Strider do
   def call(content, opts) when is_list(opts) do
     model = Keyword.fetch!(opts, :model)
     {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
+    {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
+    {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
 
-    agent = Agent.new({default_backend(), model}, agent_opts)
-    {context, final_content} = build_context_from_content(content)
+    agent = Agent.new({backend, model}, agent_opts)
+    {context, final_content} = build_context_from_content(content, base_context)
 
     Runtime.call(agent, final_content, context, call_opts)
   end
@@ -162,9 +164,11 @@ defmodule Strider do
   def stream(content, opts) when is_list(opts) do
     model = Keyword.fetch!(opts, :model)
     {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
+    {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
+    {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
 
-    agent = Agent.new({default_backend(), model}, agent_opts)
-    {context, final_content} = build_context_from_content(content)
+    agent = Agent.new({backend, model}, agent_opts)
+    {context, final_content} = build_context_from_content(content, base_context)
 
     Runtime.stream(agent, final_content, context, call_opts)
   end
@@ -176,27 +180,35 @@ defmodule Strider do
   end
 
   # Detect messages format (has :role key) and build context from conversation history
-  defp build_context_from_content([%{role: _} | _] = messages) do
+  defp build_context_from_content(content, base_context \\ Context.new())
+
+  defp build_context_from_content([%{role: _} | _] = messages, base_context) do
     {history, [last]} = Enum.split(messages, -1)
 
     context =
-      Enum.reduce(history, Context.new(), fn msg, ctx ->
+      Enum.reduce(history, base_context, fn msg, ctx ->
         Context.add_message(ctx, msg.role, msg.content)
       end)
 
     {context, last.content}
   end
 
-  defp build_context_from_content(content) do
-    {Context.new(), content}
+  defp build_context_from_content(content, base_context) do
+    {base_context, content}
   end
 
   defp default_backend do
-    if Code.ensure_loaded?(Strider.Backends.ReqLLM) do
-      Strider.Backends.ReqLLM
-    else
-      raise ArgumentError,
-            "No backend available. Add {:req_llm, \"~> 1.0\"} to deps or pass an agent."
+    case Application.get_env(:strider, :default_backend) do
+      nil ->
+        if Code.ensure_loaded?(Strider.Backends.ReqLLM) do
+          Strider.Backends.ReqLLM
+        else
+          raise ArgumentError,
+                "No backend available. Add {:req_llm, \"~> 1.0\"} to deps or configure :default_backend."
+        end
+
+      backend ->
+        backend
     end
   end
 end

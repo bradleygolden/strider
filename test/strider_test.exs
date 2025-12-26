@@ -245,6 +245,70 @@ defmodule StriderTest do
     end
   end
 
+  describe "call/2 with :context option" do
+    test "appends messages to existing context" do
+      existing_context =
+        Context.new()
+        |> Context.add_message(:user, "My name is Alice")
+        |> Context.add_message(:assistant, "Nice to meet you, Alice!")
+
+      {:ok, response, updated_context} =
+        Strider.call("What's my name?",
+          backend: Strider.Backends.Mock,
+          model: [response: "Your name is Alice."],
+          context: existing_context
+        )
+
+      assert response.content == "Your name is Alice."
+      # Should have: 2 existing + 1 new user + 1 new assistant = 4
+      assert Context.message_count(updated_context) == 4
+    end
+
+    test "appends conversation history to existing context" do
+      existing_context =
+        Context.new()
+        |> Context.add_message(:user, "Remember: the secret word is banana")
+        |> Context.add_message(:assistant, "Got it, I'll remember that.")
+
+      {:ok, response, updated_context} =
+        Strider.call(
+          [
+            %{role: :user, content: "What's 2+2?"},
+            %{role: :assistant, content: "4"},
+            %{role: :user, content: "What's the secret word?"}
+          ],
+          backend: Strider.Backends.Mock,
+          model: [response: "The secret word is banana."],
+          context: existing_context
+        )
+
+      assert response.content == "The secret word is banana."
+      # 2 existing + 2 from messages history + 1 user + 1 assistant = 6
+      assert Context.message_count(updated_context) == 6
+    end
+  end
+
+  describe "stream/2 with :context option" do
+    test "appends to existing context" do
+      existing_context =
+        Context.new()
+        |> Context.add_message(:user, "My name is Bob")
+        |> Context.add_message(:assistant, "Hi Bob!")
+
+      {:ok, stream, updated_context} =
+        Strider.stream("Tell me a joke",
+          backend: Strider.Backends.Mock,
+          model: [stream_chunks: ["Why", " did", " the", " chicken"]],
+          context: existing_context
+        )
+
+      chunks = Enum.to_list(stream)
+      assert length(chunks) == 4
+      # 2 existing + 1 new user = 3 (stream doesn't add assistant response)
+      assert Context.message_count(updated_context) == 3
+    end
+  end
+
   describe "Agent.new/1 API styles" do
     test "tuple as first argument" do
       agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet"})

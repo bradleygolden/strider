@@ -115,16 +115,31 @@ Pass conversation history directly as messages:
 # => "Your name is Alice."
 ```
 
-For stateful conversations across multiple calls, use an explicit agent with context:
+For stateful conversations across multiple calls, use the `:context` option:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"})
-context = Strider.Context.new()
+# First call - get back the context
+{:ok, _response, context} = Strider.call("My name is Alice.",
+  model: "anthropic:claude-4-5-sonnet"
+)
 
-{:ok, _response, context} = Strider.call(agent, "My name is Alice.", context)
-{:ok, response, _context} = Strider.call(agent, "What's my name?", context)
+# Second call - pass the context to continue the conversation
+{:ok, response, _context} = Strider.call("What's my name?",
+  model: "anthropic:claude-4-5-sonnet",
+  context: context
+)
 
 # => "Your name is Alice."
+```
+
+You can also combine messages with an existing context - messages are appended:
+
+```elixir
+{:ok, response, context} = Strider.call([
+  %{role: :user, content: "What's 2+2?"},
+  %{role: :assistant, content: "4"},
+  %{role: :user, content: "And what's that times 10?"}
+], model: "anthropic:claude-4-5-sonnet", context: existing_context)
 ```
 
 ## Explicit Agents
