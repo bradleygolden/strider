@@ -244,8 +244,9 @@ defmodule Strider.Content do
       #=> [%Part{...}, %Part{...}]
 
   """
-  @spec wrap(String.t() | Part.t() | [Part.t()]) :: [Part.t()]
+  @spec wrap(String.t() | Part.t() | [Part.t()] | map()) :: [Part.t()]
   def wrap(content) when is_binary(content), do: [text(content)]
   def wrap(%Part{} = part), do: [part]
   def wrap(parts) when is_list(parts), do: parts
+  def wrap(content) when is_map(content), do: [text(Jason.encode!(content))]
 end
