@@ -16,6 +16,8 @@ if Code.ensure_loaded?(Req) do
     - `:memory_mb` - Memory limit in MB (default: 256)
     - `:cpu` - CPU count (default: 1)
     - `:cpu_kind` - CPU type, "shared" or "performance" (default: "shared")
+    - `:auto_destroy` - Auto-destroy machine on exit (default: true). Set to false for
+      persistent machines that should survive restarts.
 
     Fly-specific fields:
     - `:app_name` - Fly app name (required)
@@ -82,7 +84,7 @@ if Code.ensure_loaded?(Req) do
               cpu_kind: Map.get(config, :cpu_kind, "shared")
             },
             services: build_services(Map.get(config, :ports, [])),
-            auto_destroy: true,
+            auto_destroy: Map.get(config, :auto_destroy, true),
             restart: %{policy: "no"}
           }
         }
