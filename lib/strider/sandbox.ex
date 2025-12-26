@@ -310,7 +310,7 @@ defmodule Strider.Sandbox do
     port = Keyword.get(opts, :port, 4001)
     timeout = Keyword.get(opts, :timeout, 60_000)
 
-    with {:ok, base_url} <- get_url(sandbox, port) do
+    with {:ok, base_url} <- get_base_url(sandbox, port) do
       url = "#{base_url}/prompt"
       custom_opts = Keyword.get(opts, :options, %{})
       body = Jason.encode!(%{prompt: content, options: custom_opts})
@@ -381,6 +381,13 @@ defmodule Strider.Sandbox do
       100 -> :ok
     end
   end
+
+  defp get_base_url(%Instance{metadata: %{private_ip: private_ip}}, port)
+       when is_binary(private_ip) do
+    {:ok, "http://[#{private_ip}]:#{port}"}
+  end
+
+  defp get_base_url(sandbox, port), do: get_url(sandbox, port)
 
   defp normalize_config(config) when is_map(config), do: config
   defp normalize_config(config) when is_list(config), do: Map.new(config)
