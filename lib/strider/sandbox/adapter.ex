@@ -128,5 +128,27 @@ defmodule Strider.Sandbox.Adapter do
   """
   @callback await_ready(sandbox_id(), metadata(), opts()) :: {:ok, map()} | {:error, term()}
 
-  @optional_callbacks [get_url: 2, read_file: 3, write_file: 4, write_files: 3, await_ready: 3]
+  @doc """
+  Updates a sandbox's configuration without destroying it.
+
+  This is useful for updating the image or other config while preserving
+  state like volume attachments. Not all adapters support this operation.
+
+  ## Options
+    * `:image` - Container image
+    * `:memory_mb` - Memory limit in MB
+    * `:cpu` - CPU count
+    * `:env` - Environment variables
+    * `:ports` - Ports to expose
+  """
+  @callback update(sandbox_id(), config(), opts()) :: {:ok, map()} | {:error, term()}
+
+  @optional_callbacks [
+    get_url: 2,
+    read_file: 3,
+    write_file: 4,
+    write_files: 3,
+    await_ready: 3,
+    update: 3
+  ]
 end

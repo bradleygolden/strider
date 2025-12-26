@@ -236,6 +236,34 @@ if Code.ensure_loaded?(Req) do
     end
 
     @doc """
+    Updates a machine's configuration without destroying it.
+
+    This preserves volume attachments, unlike terminate + create.
+
+    ## Supported Options
+
+      * `:image` - Container image (required)
+      * `:memory_mb` - Memory limit in MB (default: 256)
+      * `:cpu` - CPU count (default: 1)
+      * `:cpu_kind` - "shared" or "performance" (default: "shared")
+      * `:env` - Environment variables as `[{name, value}]`
+      * `:ports` - Ports to expose
+
+    ## Example
+
+        Fly.update(sandbox_id, %{image: "node:23-slim"}, api_token: token)
+        Fly.update(sandbox_id, %{image: "node:23-slim", memory_mb: 1024}, api_token: token)
+    """
+    @impl true
+    def update(sandbox_id, config, opts \\ []) do
+      {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
+      api_token = get_api_token!(opts)
+
+      body = %{config: build_machine_config(config)}
+      Client.post("/apps/#{app_name}/machines/#{machine_id}", body, api_token)
+    end
+
+    @doc """
     Waits for a Fly Machine to reach a specific state.
 
     ## States
@@ -333,6 +361,37 @@ if Code.ensure_loaded?(Req) do
     end
 
     # Private helpers
+
+    defp build_machine_config(config) do
+      base = %{
+        image: Map.fetch!(config, :image),
+        guest: %{
+          memory_mb: Map.get(config, :memory_mb, 256),
+          cpus: Map.get(config, :cpu, 1),
+          cpu_kind: Map.get(config, :cpu_kind, "shared")
+        }
+      }
+
+      base
+      |> maybe_add_env(config)
+      |> maybe_add_services(config)
+    end
+
+    defp maybe_add_env(machine_config, config) do
+      case Map.get(config, :env) do
+        nil -> machine_config
+        [] -> machine_config
+        env -> Map.put(machine_config, :env, build_env(%{env: env}))
+      end
+    end
+
+    defp maybe_add_services(machine_config, config) do
+      case Map.get(config, :ports) do
+        nil -> machine_config
+        [] -> machine_config
+        ports -> Map.put(machine_config, :services, build_services(ports))
+      end
+    end
 
     defp parse_sandbox_id!(sandbox_id) do
       case String.split(sandbox_id, ":", parts: 2) do
