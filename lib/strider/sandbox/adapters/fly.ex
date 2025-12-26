@@ -278,14 +278,28 @@ if Code.ensure_loaded?(Req) do
     - "started" - Machine is running
     - "stopped" - Machine is stopped
     - "destroyed" - Machine is destroyed
+
+    ## Options
+    - `:timeout` - Wait timeout in seconds (default: 60)
+    - `:instance_id` - Required when waiting for "stopped" state. The instance_id
+      is returned from `update/3` and identifies the specific machine version.
+
+    ## Example
+
+        {:ok, %{"instance_id" => instance_id}} = Fly.update(sandbox_id, config, opts)
+        Fly.wait(sandbox_id, "stopped", instance_id: instance_id, timeout: 60)
     """
     def wait(sandbox_id, state, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
       timeout = Keyword.get(opts, :timeout, 60)
+      instance_id = Keyword.get(opts, :instance_id)
+
+      query = "state=#{state}&timeout=#{timeout}"
+      query = if instance_id, do: "#{query}&instance_id=#{instance_id}", else: query
 
       Client.get(
-        "/apps/#{app_name}/machines/#{machine_id}/wait?state=#{state}&timeout=#{timeout}",
+        "/apps/#{app_name}/machines/#{machine_id}/wait?#{query}",
         api_token
       )
     end

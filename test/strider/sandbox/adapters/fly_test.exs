@@ -46,5 +46,21 @@ if Code.ensure_loaded?(Req) do
         end
       end
     end
+
+    describe "wait/3" do
+      @tag :integration
+      test "requires FLY_API_TOKEN" do
+        assert_raise ArgumentError, ~r/api_token is required/, fn ->
+          Fly.wait("test-app:machine123", "stopped")
+        end
+      end
+
+      @tag :integration
+      test "accepts instance_id option" do
+        assert_raise ArgumentError, ~r/api_token is required/, fn ->
+          Fly.wait("test-app:machine123", "stopped", instance_id: "abc123")
+        end
+      end
+    end
   end
 end
