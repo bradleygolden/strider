@@ -143,12 +143,27 @@ defmodule Strider.Sandbox.Adapter do
   """
   @callback update(sandbox_id(), config(), opts()) :: {:ok, map()} | {:error, term()}
 
+  @doc """
+  Stops a sandbox without destroying it.
+
+  Useful for suspend/resume patterns to save costs. The sandbox can be
+  restarted with `start/2`.
+  """
+  @callback stop(sandbox_id(), opts()) :: {:ok, map()} | {:error, term()}
+
+  @doc """
+  Starts a stopped sandbox.
+  """
+  @callback start(sandbox_id(), opts()) :: {:ok, map()} | {:error, term()}
+
   @optional_callbacks [
     get_url: 2,
     read_file: 3,
     write_file: 4,
     write_files: 3,
     await_ready: 3,
-    update: 3
+    update: 3,
+    stop: 2,
+    start: 2
   ]
 end

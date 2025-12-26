@@ -218,6 +218,7 @@ if Code.ensure_loaded?(Req) do
 
     Useful for suspend/resume patterns to save costs.
     """
+    @impl true
     def stop(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
@@ -228,6 +229,7 @@ if Code.ensure_loaded?(Req) do
     @doc """
     Starts a stopped Fly Machine.
     """
+    @impl true
     def start(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)

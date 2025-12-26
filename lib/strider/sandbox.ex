@@ -251,6 +251,62 @@ defmodule Strider.Sandbox do
     end
   end
 
+  @doc """
+  Stops a sandbox without destroying it.
+
+  Useful for suspend/resume patterns. The sandbox can be restarted with `start/1`.
+  Returns `{:error, :not_implemented}` if the adapter doesn't support it.
+
+  ## Examples
+
+      {:ok, _} = Strider.Sandbox.stop(sandbox)
+  """
+  @spec stop(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def stop(%Instance{adapter: adapter} = sandbox, opts \\ []) do
+    if function_exported?(adapter, :stop, 2) do
+      adapter.stop(sandbox.id, opts)
+    else
+      {:error, :not_implemented}
+    end
+  end
+
+  @doc """
+  Starts a stopped sandbox.
+
+  Returns `{:error, :not_implemented}` if the adapter doesn't support it.
+
+  ## Examples
+
+      {:ok, _} = Strider.Sandbox.start(sandbox)
+  """
+  @spec start(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def start(%Instance{adapter: adapter} = sandbox, opts \\ []) do
+    if function_exported?(adapter, :start, 2) do
+      adapter.start(sandbox.id, opts)
+    else
+      {:error, :not_implemented}
+    end
+  end
+
+  @doc """
+  Updates a sandbox's configuration without destroying it.
+
+  This preserves state like volume attachments. Returns `{:error, :not_implemented}`
+  if the adapter doesn't support it.
+
+  ## Examples
+
+      {:ok, _} = Strider.Sandbox.update(sandbox, %{image: "node:23-slim"})
+  """
+  @spec update(Instance.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
+  def update(%Instance{adapter: adapter} = sandbox, config, opts \\ []) do
+    if function_exported?(adapter, :update, 3) do
+      adapter.update(sandbox.id, config, opts)
+    else
+      {:error, :not_implemented}
+    end
+  end
+
   defp poll_health_endpoint(sandbox, opts) do
     port = Keyword.get(opts, :port, 4001)
     timeout = Keyword.get(opts, :timeout, 60_000)
