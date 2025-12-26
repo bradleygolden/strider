@@ -1,14 +1,15 @@
 defmodule Strider.MessageTest do
   use ExUnit.Case, async: true
 
-  alias Strider.Message
+  alias Strider.{Content, Message}
+  alias Strider.Content.Part
 
   describe "new/3" do
-    test "creates a message with required fields" do
+    test "creates a message with string content (wrapped to Content.Part)" do
       message = Message.new(:user, "Hello!")
 
       assert message.role == :user
-      assert message.content == "Hello!"
+      assert message.content == [%Part{type: :text, text: "Hello!"}]
       assert message.metadata == %{}
     end
 
@@ -16,7 +17,7 @@ defmodule Strider.MessageTest do
       message = Message.new(:assistant, "Hi!", %{tokens: 5})
 
       assert message.role == :assistant
-      assert message.content == "Hi!"
+      assert message.content == [%Part{type: :text, text: "Hi!"}]
       assert message.metadata == %{tokens: 5}
     end
 
@@ -26,10 +27,17 @@ defmodule Strider.MessageTest do
       assert %Message{role: :assistant} = Message.new(:assistant, "Assistant reply")
     end
 
-    test "accepts multi-modal content as list" do
+    test "accepts single Content.Part" do
+      part = Content.text("Hello!")
+      message = Message.new(:user, part)
+
+      assert message.content == [part]
+    end
+
+    test "accepts multi-modal content as list of Content.Part" do
       content = [
-        %{type: :text, text: "What's in this image?"},
-        %{type: :image_url, url: "https://example.com/image.png"}
+        Content.text("What's in this image?"),
+        Content.image_url("https://example.com/image.png")
       ]
 
       message = Message.new(:user, content)
@@ -38,44 +46,15 @@ defmodule Strider.MessageTest do
       assert message.content == content
     end
 
-    test "accepts structured content as map" do
-      content = %{audio: <<1, 2, 3>>, format: "wav"}
-
-      message = Message.new(:user, content)
-
-      assert message.role == :user
-      assert message.content == content
-    end
-  end
-
-  describe "to_provider_format/1" do
-    test "converts message to provider format" do
-      message = Message.new(:user, "Hello!")
-
-      assert Message.to_provider_format(message) == %{
-               role: "user",
-               content: "Hello!"
-             }
-    end
-
-    test "converts all roles correctly" do
-      assert %{role: "system"} = Message.to_provider_format(Message.new(:system, "test"))
-      assert %{role: "user"} = Message.to_provider_format(Message.new(:user, "test"))
-      assert %{role: "assistant"} = Message.to_provider_format(Message.new(:assistant, "test"))
-    end
-
-    test "preserves multi-modal content in provider format" do
+    test "accepts binary image content" do
       content = [
-        %{type: :text, text: "Describe this"},
-        %{type: :image_url, url: "https://example.com/img.png"}
+        Content.text("Describe this image"),
+        Content.image(<<1, 2, 3>>, "image/png")
       ]
 
       message = Message.new(:user, content)
 
-      assert Message.to_provider_format(message) == %{
-               role: "user",
-               content: content
-             }
+      assert [%Part{type: :text}, %Part{type: :image, data: <<1, 2, 3>>}] = message.content
     end
   end
 end

@@ -11,7 +11,7 @@ defmodule Strider.Runtime do
   This module is used internally by `Strider.call/4` and `Strider.stream/4`.
   """
 
-  alias Strider.{Agent, Context, Hooks, Response}
+  alias Strider.{Agent, Context, Hooks, Message, Response}
 
   @doc """
   Executes a synchronous call to an agent.
@@ -155,11 +155,11 @@ defmodule Strider.Runtime do
     system_messages =
       case agent.system_prompt do
         nil -> []
-        system_prompt -> [%{role: "system", content: system_prompt}]
+        prompt -> [Message.new(:system, prompt)]
       end
 
-    context_messages = Context.to_messages(context)
-    user_message = %{role: "user", content: content}
+    context_messages = Context.messages(context)
+    user_message = Message.new(:user, content)
 
     system_messages ++ context_messages ++ [user_message]
   end

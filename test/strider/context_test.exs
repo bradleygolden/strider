@@ -1,7 +1,8 @@
 defmodule Strider.ContextTest do
   use ExUnit.Case, async: true
 
-  alias Strider.{Context, Message}
+  alias Strider.{Content, Context, Message}
+  alias Strider.Content.Part
 
   describe "new/1" do
     test "creates an empty context" do
@@ -33,7 +34,7 @@ defmodule Strider.ContextTest do
 
       assert length(context.messages) == 1
       assert hd(context.messages).role == :user
-      assert hd(context.messages).content == "Hello!"
+      assert hd(context.messages).content == [%Part{type: :text, text: "Hello!"}]
     end
 
     test "appends messages in order" do
@@ -44,9 +45,9 @@ defmodule Strider.ContextTest do
         |> Context.add_message(:user, "Third")
 
       assert length(context.messages) == 3
-      assert Enum.at(context.messages, 0).content == "First"
-      assert Enum.at(context.messages, 1).content == "Second"
-      assert Enum.at(context.messages, 2).content == "Third"
+      assert Enum.at(context.messages, 0).content == [Content.text("First")]
+      assert Enum.at(context.messages, 1).content == [Content.text("Second")]
+      assert Enum.at(context.messages, 2).content == [Content.text("Third")]
     end
 
     test "adds message with metadata" do
@@ -56,6 +57,16 @@ defmodule Strider.ContextTest do
 
       message = hd(context.messages)
       assert message.metadata == %{tokens: 5}
+    end
+
+    test "adds message with Content.Part content" do
+      parts = [Content.text("What's this?"), Content.image_url("https://example.com/img.png")]
+
+      context =
+        Context.new()
+        |> Context.add_message(:user, parts)
+
+      assert hd(context.messages).content == parts
     end
   end
 
@@ -71,23 +82,21 @@ defmodule Strider.ContextTest do
     end
   end
 
-  describe "to_messages/1" do
-    test "converts messages to provider format" do
+  describe "messages/1" do
+    test "returns Message structs" do
       context =
         Context.new()
         |> Context.add_message(:user, "Hello!")
         |> Context.add_message(:assistant, "Hi there!")
 
-      messages = Context.to_messages(context)
+      messages = Context.messages(context)
 
-      assert messages == [
-               %{role: "user", content: "Hello!"},
-               %{role: "assistant", content: "Hi there!"}
-             ]
+      assert length(messages) == 2
+      assert [%Message{role: :user}, %Message{role: :assistant}] = messages
     end
 
     test "returns empty list for empty context" do
-      assert Context.to_messages(Context.new()) == []
+      assert Context.messages(Context.new()) == []
     end
   end
 
@@ -103,7 +112,7 @@ defmodule Strider.ContextTest do
         |> Context.add_message(:assistant, "Last")
 
       last = Context.last_message(context)
-      assert last.content == "Last"
+      assert last.content == [Content.text("Last")]
     end
   end
 

@@ -3,6 +3,7 @@ if Code.ensure_loaded?(ReqLLM) do
     use ExUnit.Case, async: true
 
     alias Strider.Backends.ReqLLM
+    alias Strider.{Content, Message}
 
     describe "Strider.Backends.ReqLLM" do
       test "implements Strider.Backend behaviour" do
@@ -69,7 +70,7 @@ if Code.ensure_loaded?(ReqLLM) do
           req_http_options: [plug: {Req.Test, __MODULE__}]
         }
 
-        messages = [%{role: "user", content: "Generate a person"}]
+        messages = [Message.new(:user, "Generate a person")]
         output_schema = Zoi.object(%{name: Zoi.string(), age: Zoi.integer()})
 
         assert {:ok, response} = ReqLLM.call(config, messages, output_schema: output_schema)
@@ -85,11 +86,28 @@ if Code.ensure_loaded?(ReqLLM) do
           req_http_options: [plug: {Req.Test, __MODULE__}]
         }
 
-        messages = [%{role: "user", content: "Say hello"}]
+        messages = [Message.new(:user, "Say hello")]
 
         assert {:ok, response} = ReqLLM.call(config, messages, [])
         assert [%{text: "Hello!"}] = response.content
         assert response.finish_reason == :stop
+      end
+
+      test "converts multi-modal content to ReqLLM format" do
+        config = %{
+          model: "anthropic:claude-sonnet-4-20250514",
+          req_http_options: [plug: {Req.Test, __MODULE__}]
+        }
+
+        messages = [
+          Message.new(:user, [
+            Content.text("What's in this image?"),
+            Content.image_url("https://example.com/cat.png")
+          ])
+        ]
+
+        assert {:ok, response} = ReqLLM.call(config, messages, [])
+        assert [%{text: "Hello!"}] = response.content
       end
     end
   end

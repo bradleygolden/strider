@@ -4,8 +4,11 @@ defmodule Strider do
 
   ## Quick Start
 
-      # Create an agent with StriderReqLLM (requires :strider_req_llm dep)
-      agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
+      # Simple call (requires :req_llm dep)
+      {:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
+
+      # Or create an agent explicitly
+      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
         system_prompt: "You are a helpful assistant."
       )
 
@@ -21,30 +24,33 @@ defmodule Strider do
 
   - `Strider.Agent` - Configuration struct for an agent (backend, system prompt, hooks)
   - `Strider.Context` - Conversation history and metadata
+  - `Strider.Content` - Multi-modal content (text, images, files, audio, video)
+  - `Strider.Message` - Individual message in a conversation
   - `Strider.Backend` - Behaviour for LLM backend implementations
   - `Strider.Hooks` - Behaviour for lifecycle event hooks
   - `Strider.Response` - Normalized response struct with content, tool_calls, finish_reason
-  - `Strider.Message` - Individual message in a conversation
 
   ## Optional Packages
 
-  - `:strider_req_llm` - Multi-provider LLM backend via ReqLLM
-  - `:strider_telemetry` - Telemetry hooks for observability
-  - `:strider_schema` - Schema validation for structured outputs
+  - `:req_llm` - Multi-provider LLM backend (enables `Strider.Backends.ReqLLM`)
+  - `:telemetry` - Telemetry integration for observability
+  - `:zoi` - Schema validation for structured outputs
 
   """
 
   alias Strider.{Agent, Context, Response, Runtime}
 
+  @agent_opts [:system_prompt, :hooks, :temperature, :max_tokens, :top_p]
+
   @doc """
-  Calls an agent with content and returns the response.
+  Calls an LLM and returns the response.
 
-  ## Parameters
+  ## Variants
 
-  - `agent` - A `Strider.Agent` struct
-  - `content` - The user's message (string, multi-modal list, or any term)
-  - `context` - A `Strider.Context` struct with conversation history
-  - `opts` - Optional keyword list of options
+  - `call(content, opts)` - Simple call with just content and options (requires `:model`)
+  - `call(agent, content)` - Call with agent, creates fresh context
+  - `call(agent, content, context)` - Full call with agent and context
+  - `call(agent, content, context, opts)` - Full call with options
 
   ## Returns
 
@@ -53,19 +59,63 @@ defmodule Strider do
 
   ## Examples
 
+      # Simple call (no agent needed)
+      {:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
+
+      # With system prompt
+      {:ok, response, _ctx} = Strider.call("Translate to Spanish",
+        model: "anthropic:claude-4-5-sonnet",
+        system_prompt: "You are a translator."
+      )
+
+      # Multi-modal content (use Strider.Content)
+      alias Strider.Content
+      {:ok, response, _ctx} = Strider.call([
+        Content.text("What's in this image?"),
+        Content.image_url("https://example.com/cat.png")
+      ], model: "anthropic:claude-4-5-sonnet")
+
+      # Messages/conversation history (few-shot, context)
+      {:ok, response, _ctx} = Strider.call([
+        %{role: :user, content: "Translate: Hello"},
+        %{role: :assistant, content: "Hola"},
+        %{role: :user, content: "Translate: Goodbye"}
+      ], model: "anthropic:claude-4-5-sonnet")
+
+      # Multi-modal content in messages (role + images)
+      alias Strider.Content
+      {:ok, response, _ctx} = Strider.call([
+        %{role: :user, content: [Content.text("What's this?"), Content.image_url("https://example.com/cat.png")]},
+        %{role: :assistant, content: "I see a cat."},
+        %{role: :user, content: "What color is it?"}
+      ], model: "anthropic:claude-4-5-sonnet")
+
+      # With explicit agent (no context)
       agent = Strider.Agent.new({:mock, response: "Hello!"})
+      {:ok, response, _ctx} = Strider.call(agent, "Hello!")
+
+      # Full explicit call
       context = Strider.Context.new()
-
       {:ok, response, context} = Strider.call(agent, "Hello!", context)
-      IO.puts(response.content)
-
-      # Multi-modal content
-      {:ok, response, context} = Strider.call(agent, [
-        %{type: :text, text: "What's in this image?"},
-        %{type: :image_url, url: "https://example.com/image.png"}
-      ], context)
 
   """
+  @spec call(Agent.t(), term()) :: {:ok, Response.t(), Context.t()} | {:error, term()}
+  def call(%Agent{} = agent, content) do
+    {context, final_content} = build_context_from_content(content)
+    Runtime.call(agent, final_content, context, [])
+  end
+
+  @spec call(term(), keyword()) :: {:ok, Response.t(), Context.t()} | {:error, term()}
+  def call(content, opts) when is_list(opts) do
+    model = Keyword.fetch!(opts, :model)
+    {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
+
+    agent = Agent.new({default_backend(), model}, agent_opts)
+    {context, final_content} = build_context_from_content(content)
+
+    Runtime.call(agent, final_content, context, call_opts)
+  end
+
   @spec call(Agent.t(), term(), Context.t(), keyword()) ::
           {:ok, Response.t(), Context.t()} | {:error, term()}
   def call(%Agent{} = agent, content, %Context{} = context, opts \\ []) do
@@ -73,14 +123,14 @@ defmodule Strider do
   end
 
   @doc """
-  Streams an agent response for a given content.
+  Streams an LLM response.
 
-  ## Parameters
+  ## Variants
 
-  - `agent` - A `Strider.Agent` struct
-  - `content` - The user's message (string, multi-modal list, or any term)
-  - `context` - A `Strider.Context` struct with conversation history
-  - `opts` - Optional keyword list of options
+  - `stream(content, opts)` - Simple stream with just content and options (requires `:model`)
+  - `stream(agent, content)` - Stream with agent, creates fresh context
+  - `stream(agent, content, context)` - Full stream with agent and context
+  - `stream(agent, content, context, opts)` - Full stream with options
 
   ## Returns
 
@@ -89,18 +139,64 @@ defmodule Strider do
 
   ## Examples
 
-      agent = Strider.Agent.new({:mock, stream_chunks: ["Hello", " ", "world"]})
-      context = Strider.Context.new()
+      # Simple stream (no agent needed)
+      {:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-4-5-sonnet")
+      Enum.each(stream, fn chunk -> IO.write(chunk.content) end)
 
+      # With explicit agent (no context)
+      agent = Strider.Agent.new({:mock, stream_chunks: ["Hello", " ", "world"]})
+      {:ok, stream, _ctx} = Strider.stream(agent, "Tell me a story")
+
+      # Full explicit call
+      context = Strider.Context.new()
       {:ok, stream, _context} = Strider.stream(agent, "Tell me a story", context)
-      Enum.each(stream, fn chunk ->
-        IO.write(chunk.content)
-      end)
 
   """
+  @spec stream(Agent.t(), term()) :: {:ok, Enumerable.t(), Context.t()} | {:error, term()}
+  def stream(%Agent{} = agent, content) do
+    {context, final_content} = build_context_from_content(content)
+    Runtime.stream(agent, final_content, context, [])
+  end
+
+  @spec stream(term(), keyword()) :: {:ok, Enumerable.t(), Context.t()} | {:error, term()}
+  def stream(content, opts) when is_list(opts) do
+    model = Keyword.fetch!(opts, :model)
+    {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
+
+    agent = Agent.new({default_backend(), model}, agent_opts)
+    {context, final_content} = build_context_from_content(content)
+
+    Runtime.stream(agent, final_content, context, call_opts)
+  end
+
   @spec stream(Agent.t(), term(), Context.t(), keyword()) ::
           {:ok, Enumerable.t(), Context.t()} | {:error, term()}
   def stream(%Agent{} = agent, content, %Context{} = context, opts \\ []) do
     Runtime.stream(agent, content, context, opts)
+  end
+
+  # Detect messages format (has :role key) and build context from conversation history
+  defp build_context_from_content([%{role: _} | _] = messages) do
+    {history, [last]} = Enum.split(messages, -1)
+
+    context =
+      Enum.reduce(history, Context.new(), fn msg, ctx ->
+        Context.add_message(ctx, msg.role, msg.content)
+      end)
+
+    {context, last.content}
+  end
+
+  defp build_context_from_content(content) do
+    {Context.new(), content}
+  end
+
+  defp default_backend do
+    if Code.ensure_loaded?(Strider.Backends.ReqLLM) do
+      Strider.Backends.ReqLLM
+    else
+      raise ArgumentError,
+            "No backend available. Add {:req_llm, \"~> 1.0\"} to deps or pass an agent."
+    end
   end
 end

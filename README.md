@@ -51,6 +51,42 @@ context = Strider.Context.new()
 IO.puts(response.content)
 ```
 
+### Multi-Modal Content
+
+Use `Strider.Content` for images, files, audio, and other content types:
+
+```elixir
+alias Strider.Content
+
+# Image from URL
+{:ok, response, _ctx} = Strider.call(agent, [
+  Content.text("What's in this image?"),
+  Content.image_url("https://example.com/cat.png")
+])
+
+# Base64 image data
+image_bytes = File.read!("photo.png")
+{:ok, response, _ctx} = Strider.call(agent, [
+  Content.text("Describe this photo"),
+  Content.image(image_bytes, "image/png")
+])
+
+# PDF file
+pdf_bytes = File.read!("report.pdf")
+{:ok, response, _ctx} = Strider.call(agent, [
+  Content.text("Summarize this document"),
+  Content.file(pdf_bytes, "application/pdf", filename: "report.pdf")
+])
+```
+
+Plain strings are automatically wrapped as text content:
+
+```elixir
+# These are equivalent:
+Strider.call(agent, "Hello!")
+Strider.call(agent, Content.text("Hello!"))
+```
+
 ### Multi-Turn Conversations
 
 Context carries the conversation history:

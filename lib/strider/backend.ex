@@ -62,10 +62,10 @@ defmodule Strider.Backend do
 
   """
 
-  alias Strider.Response
+  alias Strider.{Message, Response}
 
   @type config :: map()
-  @type messages :: [map()]
+  @type messages :: [Message.t()]
   @type opts :: keyword()
   @type chunk :: %{content: term(), metadata: map()}
   @type error :: {:error, term()}
@@ -76,7 +76,7 @@ defmodule Strider.Backend do
   ## Parameters
 
   - `config` - Backend configuration (model, API keys, etc.)
-  - `messages` - List of messages in provider format
+  - `messages` - List of `Strider.Message` structs
   - `opts` - Additional options:
     - `:output_schema` - Schema for structured output validation
 
@@ -94,7 +94,7 @@ defmodule Strider.Backend do
   ## Parameters
 
   - `config` - Backend configuration
-  - `messages` - List of messages in provider format
+  - `messages` - List of `Strider.Message` structs
   - `opts` - Additional options
 
   ## Returns

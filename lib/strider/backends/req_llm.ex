@@ -69,23 +69,26 @@ if Code.ensure_loaded?(ReqLLM) do
 
     @behaviour Strider.Backend
 
-    alias Strider.Response
+    alias ReqLLM.Message.ContentPart
+    alias Strider.Content.Part
+    alias Strider.{Message, Response}
 
     @impl true
     def call(config, messages, opts) do
       model = Map.fetch!(config, :model)
       options = build_options(config)
       output_schema = Keyword.get(opts, :output_schema)
+      req_messages = Enum.map(messages, &to_req_llm_message/1)
 
       if output_schema do
-        call_with_schema(model, messages, output_schema, options)
+        call_with_schema(model, req_messages, output_schema, options)
       else
-        call_text(model, messages, options)
+        call_text(model, req_messages, options)
       end
     end
 
-    defp call_text(model, messages, options) do
-      case ReqLLM.generate_text(model, messages, options) do
+    defp call_text(model, req_messages, options) do
+      case ReqLLM.generate_text(model, req_messages, options) do
         {:ok, response} -> {:ok, normalize_response(response, model)}
         {:error, reason} -> {:error, reason}
       end
@@ -102,8 +105,9 @@ if Code.ensure_loaded?(ReqLLM) do
     def stream(config, messages, _opts) do
       model = Map.fetch!(config, :model)
       options = build_options(config)
+      req_messages = Enum.map(messages, &to_req_llm_message/1)
 
-      case ReqLLM.stream_text(model, messages, options) do
+      case ReqLLM.stream_text(model, req_messages, options) do
         {:ok, response} ->
           # ReqLLM returns a Response with stream field
           text_stream =
@@ -221,5 +225,43 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     defp normalize_usage(_), do: %{}
+
+    # Convert Strider.Message → ReqLLM message format
+    # Single text → use plain map with string content (loose map)
+    # Multi-part → use ReqLLM.Message struct with ContentPart list
+    defp to_req_llm_message(%Message{role: role, content: [%Part{type: :text, text: text}]}) do
+      %{role: role, content: text}
+    end
+
+    defp to_req_llm_message(%Message{role: role, content: parts}) do
+      content_parts = Enum.map(parts, &to_req_llm_part/1)
+      %ReqLLM.Message{role: role, content: content_parts}
+    end
+
+    defp to_req_llm_part(%Part{type: :text, text: text}) do
+      ContentPart.text(text)
+    end
+
+    defp to_req_llm_part(%Part{type: :image_url, url: url}) do
+      ContentPart.image_url(url)
+    end
+
+    defp to_req_llm_part(%Part{type: :image, data: data, media_type: media_type}) do
+      ContentPart.image(data, media_type)
+    end
+
+    defp to_req_llm_part(%Part{
+           type: :file,
+           data: data,
+           filename: filename,
+           media_type: media_type
+         }) do
+      ContentPart.file(data, filename, media_type)
+    end
+
+    defp to_req_llm_part(%Part{type: type} = part) do
+      # Fallback for other types (audio, video, custom) - pass as map
+      part |> Map.from_struct() |> Map.delete(:metadata) |> Map.put(:type, type)
+    end
   end
 end

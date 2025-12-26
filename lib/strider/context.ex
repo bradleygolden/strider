@@ -15,11 +15,12 @@ defmodule Strider.Context do
         |> Strider.Context.add_message(:user, "Hello!")
         |> Strider.Context.add_message(:assistant, "Hi there!")
 
-      # Get messages for the provider
-      messages = Strider.Context.to_messages(context)
+      # Get messages
+      messages = Strider.Context.messages(context)
 
   """
 
+  alias Strider.Content.Part
   alias Strider.Message
 
   @type t :: %__MODULE__{
@@ -52,12 +53,7 @@ defmodule Strider.Context do
   @doc """
   Adds a message to the context.
 
-  ## Parameters
-
-  - `context` - The context to add the message to
-  - `role` - The role (`:system`, `:user`, or `:assistant`)
-  - `content` - The message content
-  - `metadata` - Optional metadata for the message
+  Content can be a string (wrapped automatically), a single Part, or a list of Parts.
 
   ## Examples
 
@@ -67,7 +63,7 @@ defmodule Strider.Context do
       1
 
   """
-  @spec add_message(t(), Message.role(), term(), map()) :: t()
+  @spec add_message(t(), Message.role(), String.t() | Part.t() | [Part.t()], map()) :: t()
   def add_message(%__MODULE__{} = context, role, content, metadata \\ %{}) do
     message = Message.new(role, content, metadata)
     %{context | messages: context.messages ++ [message]}
@@ -91,20 +87,18 @@ defmodule Strider.Context do
   end
 
   @doc """
-  Converts context messages to the format expected by LLM providers.
+  Returns the messages in the context.
 
   ## Examples
 
       iex> context = Strider.Context.new()
       iex> context = Strider.Context.add_message(context, :user, "Hello!")
-      iex> Strider.Context.to_messages(context)
-      [%{role: "user", content: "Hello!"}]
+      iex> length(Strider.Context.messages(context))
+      1
 
   """
-  @spec to_messages(t()) :: [map()]
-  def to_messages(%__MODULE__{messages: messages}) do
-    Enum.map(messages, &Message.to_provider_format/1)
-  end
+  @spec messages(t()) :: [Message.t()]
+  def messages(%__MODULE__{messages: messages}), do: messages
 
   @doc """
   Returns the last message in the context, or nil if empty.
@@ -114,10 +108,6 @@ defmodule Strider.Context do
       iex> context = Strider.Context.new()
       iex> Strider.Context.last_message(context)
       nil
-
-      iex> context = Strider.Context.add_message(context, :user, "Hello!")
-      iex> Strider.Context.last_message(context)
-      %Strider.Message{role: :user, content: "Hello!", metadata: %{}}
 
   """
   @spec last_message(t()) :: Message.t() | nil

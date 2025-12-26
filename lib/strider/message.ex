@@ -2,30 +2,18 @@ defmodule Strider.Message do
   @moduledoc """
   Represents a single message in a conversation.
 
-  ## Fields
-
-  - `:role` - The role of the message sender (`:system`, `:user`, `:assistant`)
-  - `:content` - The message content (text, multi-modal parts, or any backend-specific format)
-  - `:metadata` - Optional metadata map (e.g., token counts, timestamps)
-
-  ## Content Types
-
-  Strider is content-agnostic. The `:content` field accepts any term, allowing backends
-  to interpret content as needed. Common patterns include:
-
-  - **Text** (most common): `"Hello!"` - simple string content
-  - **Multi-modal list**: `[%{type: :text, text: "What's this?"}, %{type: :image_url, url: "..."}]`
-  - **Structured data**: Backend-specific maps or structs
+  Content is always a list of Content.Part structs internally.
+  Strings are automatically wrapped for convenience.
 
   ## Examples
 
-      # Simple text message
+      # Simple text (string wrapped automatically)
       message = Strider.Message.new(:user, "Hello!")
 
-      # Multi-modal message with image
+      # Multi-modal with explicit Content.Part
       message = Strider.Message.new(:user, [
-        %{type: :text, text: "What's in this image?"},
-        %{type: :image_url, url: "https://example.com/image.png"}
+        Strider.Content.text("What's in this image?"),
+        Strider.Content.image_url("https://example.com/image.png")
       ])
 
       # Message with metadata
@@ -33,10 +21,13 @@ defmodule Strider.Message do
 
   """
 
+  alias Strider.Content
+  alias Strider.Content.Part
+
   @type role :: :system | :user | :assistant
   @type t :: %__MODULE__{
           role: role(),
-          content: term(),
+          content: [Part.t()],
           metadata: map()
         }
 
@@ -46,43 +37,24 @@ defmodule Strider.Message do
   @doc """
   Creates a new message.
 
-  ## Parameters
-
-  - `role` - One of `:system`, `:user`, or `:assistant`
-  - `content` - The message content (string, list of parts, or any term)
-  - `metadata` - Optional metadata map (default: `%{}`)
+  Content can be a string (wrapped to Content.Part), a single Part, or a list of Parts.
 
   ## Examples
 
       iex> Strider.Message.new(:user, "Hello!")
-      %Strider.Message{role: :user, content: "Hello!", metadata: %{}}
+      %Strider.Message{role: :user, content: [%Strider.Content.Part{type: :text, text: "Hello!"}], metadata: %{}}
 
-      iex> Strider.Message.new(:assistant, "Hi!", %{model: "gpt-4"})
-      %Strider.Message{role: :assistant, content: "Hi!", metadata: %{model: "gpt-4"}}
+      iex> Strider.Message.new(:user, Strider.Content.text("Hi!"))
+      %Strider.Message{role: :user, content: [%Strider.Content.Part{type: :text, text: "Hi!"}], metadata: %{}}
 
   """
-  @spec new(role(), term(), map()) :: t()
+  @spec new(role(), String.t() | Part.t() | [Part.t()], map()) :: t()
   def new(role, content, metadata \\ %{})
       when role in [:system, :user, :assistant] do
     %__MODULE__{
       role: role,
-      content: content,
+      content: Content.wrap(content),
       metadata: metadata
     }
-  end
-
-  @doc """
-  Converts a message to the format expected by LLM providers.
-
-  ## Examples
-
-      iex> message = Strider.Message.new(:user, "Hello!")
-      iex> Strider.Message.to_provider_format(message)
-      %{role: "user", content: "Hello!"}
-
-  """
-  @spec to_provider_format(t()) :: map()
-  def to_provider_format(%__MODULE__{role: role, content: content}) do
-    %{role: to_string(role), content: content}
   end
 end
