@@ -38,20 +38,40 @@ def deps do
 end
 ```
 
-## Usage
+## Quick Start
+
+The simplest way to call an LLM - just pass your prompt and model:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
-  system_prompt: "You are a helpful assistant."
-)
-
-context = Strider.Context.new()
-{:ok, response, context} = Strider.call(agent, "Hello!", context)
+{:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
 
 IO.puts(response.content)
+# => "Hello! How can I help you today?"
 ```
 
-### Multi-Modal Content
+Add a system prompt:
+
+```elixir
+{:ok, response, _ctx} = Strider.call("Translate: Hello",
+  model: "anthropic:claude-4-5-sonnet",
+  system_prompt: "You are a translator. Translate to Spanish."
+)
+# => "Hola"
+```
+
+Stream responses:
+
+```elixir
+{:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-4-5-sonnet")
+
+Enum.each(stream, fn chunk ->
+  IO.write(chunk.content)
+end)
+```
+
+That's it! No agent or context required for simple use cases.
+
+## Multi-Modal Content
 
 Use `Strider.Content` for images, files, audio, and other content types:
 
@@ -59,56 +79,75 @@ Use `Strider.Content` for images, files, audio, and other content types:
 alias Strider.Content
 
 # Image from URL
-{:ok, response, _ctx} = Strider.call(agent, [
+{:ok, response, _ctx} = Strider.call([
   Content.text("What's in this image?"),
   Content.image_url("https://example.com/cat.png")
-])
+], model: "anthropic:claude-4-5-sonnet")
 
 # Base64 image data
 image_bytes = File.read!("photo.png")
-{:ok, response, _ctx} = Strider.call(agent, [
+{:ok, response, _ctx} = Strider.call([
   Content.text("Describe this photo"),
   Content.image(image_bytes, "image/png")
-])
+], model: "anthropic:claude-4-5-sonnet")
 
 # PDF file
 pdf_bytes = File.read!("report.pdf")
-{:ok, response, _ctx} = Strider.call(agent, [
+{:ok, response, _ctx} = Strider.call([
   Content.text("Summarize this document"),
   Content.file(pdf_bytes, "application/pdf", filename: "report.pdf")
-])
+], model: "anthropic:claude-4-5-sonnet")
 ```
 
-Plain strings are automatically wrapped as text content:
+Plain strings are automatically wrapped as text content.
+
+## Multi-Turn Conversations
+
+Pass conversation history directly as messages:
 
 ```elixir
-# These are equivalent:
-Strider.call(agent, "Hello!")
-Strider.call(agent, Content.text("Hello!"))
+{:ok, response, _ctx} = Strider.call([
+  %{role: :user, content: "My name is Alice"},
+  %{role: :assistant, content: "Nice to meet you, Alice!"},
+  %{role: :user, content: "What's my name?"}
+], model: "anthropic:claude-4-5-sonnet")
+
+# => "Your name is Alice."
 ```
 
-### Multi-Turn Conversations
-
-Context carries the conversation history:
+For stateful conversations across multiple calls, use an explicit agent with context:
 
 ```elixir
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"})
 context = Strider.Context.new()
 
 {:ok, _response, context} = Strider.call(agent, "My name is Alice.", context)
 {:ok, response, _context} = Strider.call(agent, "What's my name?", context)
+
+# => "Your name is Alice."
 ```
 
-### Streaming
+## Explicit Agents
+
+For more control, create an agent explicitly:
 
 ```elixir
-{:ok, stream, context} = Strider.stream(agent, "Tell me a story", context)
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+  system_prompt: "You are a helpful assistant.",
+  temperature: 0.7,
+  max_tokens: 1000
+)
 
-Enum.each(stream, fn chunk ->
-  IO.write(chunk.content)
-end)
+context = Strider.Context.new()
+{:ok, response, context} = Strider.call(agent, "Hello!", context)
 ```
 
-### Hooks
+Agents are useful when you want to:
+- Reuse the same configuration across multiple calls
+- Add hooks for logging, caching, or guardrails
+- Use custom backends
+
+## Hooks
 
 Hooks enable middleware-like transformations at each stage of agent execution:
 
@@ -142,7 +181,7 @@ Hooks can:
 - Short-circuit with cached responses (`{:halt, response}`)
 - Block requests with guardrails (`{:error, reason}`)
 
-### BYOK (Bring Your Own Key)
+## BYOK (Bring Your Own Key)
 
 Pass API keys at runtime for multi-tenant applications:
 
@@ -150,7 +189,7 @@ Pass API keys at runtime for multi-tenant applications:
 agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
 ```
 
-### Telemetry
+## Telemetry
 
 ```elixir
 agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
@@ -158,7 +197,7 @@ agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet
 )
 ```
 
-### Prompt Templates
+## Prompt Templates
 
 ```elixir
 import Strider.Prompt.Sigils
@@ -167,7 +206,7 @@ prompt = ~P"Hello {{ name }}!"
 {:ok, rendered} = Strider.Prompt.Solid.render(prompt, %{"name" => "Alice"})
 ```
 
-### Schema Validation
+## Schema Validation
 
 ```elixir
 alias Strider.Schema.Zoi, as: Schema
@@ -176,7 +215,7 @@ schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
 {:ok, result} = Schema.parse(schema, %{name: "Alice", age: 30})
 ```
 
-### Sandbox Execution
+## Sandbox Execution
 
 ```elixir
 alias Strider.Sandbox.Adapters.Docker
@@ -191,7 +230,7 @@ alias Strider.Sandbox.Adapters.Docker
 Strider.Sandbox.terminate(sandbox)
 ```
 
-### HTTP Proxy
+## HTTP Proxy
 
 ```elixir
 # In your router
