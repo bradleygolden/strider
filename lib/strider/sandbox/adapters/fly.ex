@@ -303,7 +303,22 @@ if Code.ensure_loaded?(Req) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
 
-      body = %{config: build_machine_config(config)}
+      machine_config = build_machine_config(config)
+
+      machine_config =
+        if Map.has_key?(config, :mounts) do
+          maybe_add_mounts_to_config(machine_config, Map.get(config, :mounts))
+        else
+          case Client.get("/apps/#{app_name}/machines/#{machine_id}", api_token) do
+            {:ok, %{"config" => %{"mounts" => existing_mounts}}} when is_list(existing_mounts) ->
+              Map.put(machine_config, :mounts, existing_mounts)
+
+            _ ->
+              machine_config
+          end
+        end
+
+      body = %{config: machine_config}
       Client.post("/apps/#{app_name}/machines/#{machine_id}", body, api_token)
     end
 
@@ -429,6 +444,13 @@ if Code.ensure_loaded?(Req) do
         [] -> machine_config
         ports -> Map.put(machine_config, :services, build_services(ports))
       end
+    end
+
+    defp maybe_add_mounts_to_config(machine_config, nil), do: machine_config
+    defp maybe_add_mounts_to_config(machine_config, []), do: machine_config
+
+    defp maybe_add_mounts_to_config(machine_config, mounts) when is_list(mounts) do
+      Map.put(machine_config, :mounts, mounts)
     end
 
     defp parse_sandbox_id!(sandbox_id) do
