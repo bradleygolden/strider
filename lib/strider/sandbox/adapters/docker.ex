@@ -97,7 +97,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   @impl true
   def read_file(container_id, path, opts) do
-    case exec(container_id, "base64 '#{escape_path(path)}'", opts) do
+    case exec(container_id, "base64 -w 0 '#{escape_path(path)}'", opts) do
       {:ok, %{exit_code: 0, stdout: encoded}} ->
         case Base.decode64(String.trim(encoded)) do
           {:ok, content} -> {:ok, content}
