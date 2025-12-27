@@ -62,5 +62,84 @@ if Code.ensure_loaded?(Req) do
         end
       end
     end
+
+    describe "create/1 mount validation" do
+      test "rejects mount with missing path" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{volume: "vol_abc123"}]
+        }
+
+        assert {:error, {:invalid_mount, %{volume: "vol_abc123"}}} = Fly.create(config)
+      end
+
+      test "rejects mount with missing volume and missing name" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{path: "/data"}]
+        }
+
+        assert {:error, {:invalid_mount, %{path: "/data"}}} = Fly.create(config)
+      end
+
+      test "rejects auto-create mount with invalid size_gb" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{name: "my-vol", path: "/data", size_gb: 0}]
+        }
+
+        assert {:error, {:invalid_mount, _}} = Fly.create(config)
+      end
+
+      test "rejects auto-create mount with negative size_gb" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{name: "my-vol", path: "/data", size_gb: -5}]
+        }
+
+        assert {:error, {:invalid_mount, _}} = Fly.create(config)
+      end
+
+      test "rejects auto-create mount with missing size_gb" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{name: "my-vol", path: "/data"}]
+        }
+
+        assert {:error, {:invalid_mount, _}} = Fly.create(config)
+      end
+
+      test "rejects mount with non-string volume" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{volume: 123, path: "/data"}]
+        }
+
+        assert {:error, {:invalid_mount, _}} = Fly.create(config)
+      end
+
+      test "rejects mount with non-string path" do
+        config = %{
+          image: "node:22-slim",
+          app_name: "test-app",
+          api_token: "fake-token",
+          mounts: [%{volume: "vol_abc", path: 123}]
+        }
+
+        assert {:error, {:invalid_mount, _}} = Fly.create(config)
+      end
+    end
   end
 end

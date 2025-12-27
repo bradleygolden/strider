@@ -65,38 +65,74 @@ if Code.ensure_loaded?(Req) do
     Creates a new Fly Machine sandbox.
 
     Returns `{:ok, sandbox_id, metadata}` where sandbox_id is formatted as `"app_name:machine_id"`
-    and metadata contains `private_ip` for fast health checks.
+    and metadata contains `private_ip` for fast health checks and `created_volumes` for any
+    auto-created volumes.
+
+    ## Volume Mounts
+
+    Attach persistent Fly volumes to your sandbox:
+
+        # Existing volume (must be in same region as machine)
+        {:ok, sandbox} = Strider.Sandbox.create({Fly, %{
+          image: "node:22-slim",
+          app_name: "my-sandboxes",
+          mounts: [
+            %{volume: "vol_abc123", path: "/data"}
+          ]
+        }})
+
+        # Auto-create volume
+        {:ok, sandbox} = Strider.Sandbox.create({Fly, %{
+          image: "node:22-slim",
+          app_name: "my-sandboxes",
+          mounts: [
+            %{name: "workspace", path: "/workspace", size_gb: 10}
+          ]
+        }})
+
+    Volumes persist after `terminate/1`. Use Fly dashboard or `flyctl volumes delete` to remove.
     """
     @impl true
     def create(config) do
       app_name = get_app_name!(config)
       api_token = get_api_token!(config)
+      region = Map.get(config, :region)
 
-      body =
-        %{
-          skip_launch: Map.get(config, :skip_launch, false),
-          config: %{
-            image: Map.fetch!(config, :image),
-            env: build_env(config),
-            guest: %{
-              memory_mb: Map.get(config, :memory_mb, 256),
-              cpus: Map.get(config, :cpu, 1),
-              cpu_kind: Map.get(config, :cpu_kind, "shared")
-            },
-            services: build_services(Map.get(config, :ports, [])),
-            auto_destroy: Map.get(config, :auto_destroy, true),
-            restart: %{policy: "no"}
+      with {:ok, validated_mounts} <- validate_mounts(Map.get(config, :mounts)),
+           {:ok, resolved_mounts, created_volume_ids} <-
+             resolve_mounts(validated_mounts, app_name, region, api_token) do
+        body =
+          %{
+            skip_launch: Map.get(config, :skip_launch, false),
+            config: %{
+              image: Map.fetch!(config, :image),
+              env: build_env(config),
+              guest: %{
+                memory_mb: Map.get(config, :memory_mb, 256),
+                cpus: Map.get(config, :cpu, 1),
+                cpu_kind: Map.get(config, :cpu_kind, "shared")
+              },
+              services: build_services(Map.get(config, :ports, [])),
+              auto_destroy: Map.get(config, :auto_destroy, true),
+              restart: %{policy: "no"}
+            }
           }
-        }
-        |> maybe_add_region(config)
+          |> maybe_add_region(config)
+          |> maybe_add_mounts(resolved_mounts)
 
-      case Client.post("/apps/#{app_name}/machines", body, api_token) do
-        {:ok, %{"id" => machine_id} = response} ->
-          metadata = %{private_ip: Map.get(response, "private_ip")}
-          {:ok, "#{app_name}:#{machine_id}", metadata}
+        case Client.post("/apps/#{app_name}/machines", body, api_token) do
+          {:ok, %{"id" => machine_id} = response} ->
+            metadata = %{
+              private_ip: Map.get(response, "private_ip"),
+              created_volumes: created_volume_ids
+            }
 
-        {:error, reason} ->
-          {:error, reason}
+            {:ok, "#{app_name}:#{machine_id}", metadata}
+
+          {:error, reason} ->
+            cleanup_volumes(created_volume_ids, app_name, api_token)
+            {:error, reason}
+        end
       end
     end
 
@@ -440,6 +476,82 @@ if Code.ensure_loaded?(Req) do
         nil -> body
         region -> Map.put(body, :region, region)
       end
+    end
+
+    defp validate_mounts(nil), do: {:ok, []}
+    defp validate_mounts([]), do: {:ok, []}
+
+    defp validate_mounts(mounts) when is_list(mounts) do
+      Enum.reduce_while(mounts, {:ok, []}, fn mount, {:ok, acc} ->
+        case validate_mount(mount) do
+          {:ok, validated} -> {:cont, {:ok, [validated | acc]}}
+          {:error, _} = err -> {:halt, err}
+        end
+      end)
+      |> case do
+        {:ok, validated} -> {:ok, Enum.reverse(validated)}
+        error -> error
+      end
+    end
+
+    defp validate_mount(%{volume: vol_id, path: path})
+         when is_binary(vol_id) and is_binary(path) do
+      {:ok, {:existing, vol_id, path}}
+    end
+
+    defp validate_mount(%{name: name, path: path, size_gb: size})
+         when is_binary(name) and is_binary(path) and is_integer(size) and size > 0 do
+      {:ok, {:create, name, path, size}}
+    end
+
+    defp validate_mount(mount) do
+      {:error, {:invalid_mount, mount}}
+    end
+
+    defp resolve_mounts(validated_mounts, app_name, region, api_token) do
+      resolve_mounts(validated_mounts, app_name, region, api_token, [], [])
+    end
+
+    defp resolve_mounts([], _app, _region, _token, resolved, created) do
+      {:ok, Enum.reverse(resolved), Enum.reverse(created)}
+    end
+
+    defp resolve_mounts([{:existing, vol_id, path} | rest], app, region, token, resolved, created) do
+      mount = %{volume: vol_id, path: path}
+      resolve_mounts(rest, app, region, token, [mount | resolved], created)
+    end
+
+    defp resolve_mounts(
+           [{:create, name, path, size} | rest],
+           app,
+           region,
+           token,
+           resolved,
+           created
+         ) do
+      case Client.create_volume(app, name, size, region, token) do
+        {:ok, %{"id" => vol_id}} ->
+          mount = %{volume: vol_id, path: path}
+          resolve_mounts(rest, app, region, token, [mount | resolved], [vol_id | created])
+
+        {:error, reason} ->
+          cleanup_volumes(created, app, token)
+          {:error, {:volume_creation_failed, name, reason}}
+      end
+    end
+
+    defp cleanup_volumes([], _app, _token), do: :ok
+
+    defp cleanup_volumes(volume_ids, app_name, api_token) do
+      Enum.each(volume_ids, fn vol_id ->
+        Client.delete_volume(app_name, vol_id, api_token)
+      end)
+    end
+
+    defp maybe_add_mounts(body, []), do: body
+
+    defp maybe_add_mounts(body, mounts) when is_list(mounts) do
+      put_in(body, [:config, :mounts], mounts)
     end
 
     defp escape_path(path) do

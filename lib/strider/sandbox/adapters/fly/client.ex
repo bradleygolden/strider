@@ -46,6 +46,46 @@ if Code.ensure_loaded?(Req) do
       request(:delete, path, nil, api_token)
     end
 
+    @doc """
+    Creates a new Fly volume.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `name` - Volume name (must be unique within app)
+    - `size_gb` - Volume size in GB
+    - `region` - Region for the volume (nil uses Fly's default)
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, %{"id" => volume_id, ...}}` on success
+    - `{:error, reason}` on failure
+    """
+    def create_volume(app_name, name, size_gb, region, api_token) do
+      body = %{name: name, size_gb: size_gb}
+      body = if region, do: Map.put(body, :region, region), else: body
+      post("/apps/#{app_name}/volumes", body, api_token)
+    end
+
+    @doc """
+    Deletes a Fly volume.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `volume_id` - The volume ID to delete
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `:ok` on success (including 404 - already deleted)
+    - `{:error, reason}` on failure
+    """
+    def delete_volume(app_name, volume_id, api_token) do
+      case delete("/apps/#{app_name}/volumes/#{volume_id}", api_token) do
+        {:ok, _} -> :ok
+        {:error, :not_found} -> :ok
+        error -> error
+      end
+    end
+
     defp request(method, path, body, api_token, retry_count \\ 0) do
       url = @base_url <> path
 
