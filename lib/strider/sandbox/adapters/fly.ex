@@ -218,7 +218,7 @@ if Code.ensure_loaded?(Req) do
     """
     @impl true
     def read_file(sandbox_id, path, opts) do
-      case exec(sandbox_id, "base64 '#{escape_path(path)}'", opts) do
+      case exec(sandbox_id, "base64 -w0 '#{escape_path(path)}'", opts) do
         {:ok, %{exit_code: 0, stdout: encoded}} ->
           case Base.decode64(String.trim(encoded)) do
             {:ok, content} -> {:ok, content}
