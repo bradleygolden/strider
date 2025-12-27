@@ -148,7 +148,7 @@ if Code.ensure_loaded?(Req) do
       timeout_ms = min(Keyword.get(opts, :timeout, 30_000), 60_000)
 
       body = %{
-        cmd: command,
+        command: ["sh", "-c", command],
         timeout: div(timeout_ms, 1000)
       }
 
