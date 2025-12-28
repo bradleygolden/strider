@@ -347,8 +347,8 @@ Write your own by implementing `Strider.Backend`.
 | Package | Description | Status |
 |---------|-------------|--------|
 | `strider` | Core agent framework (Elixir) | Development |
-| `strider-sandbox` | Sandbox runtime for Node.js containers (TypeScript) | Development |
-| `strider_studio` | Real-time observability UI | Development |
+| [`strider-sandbox`](https://github.com/bradleygolden/strider-sandbox) | Sandbox runtime for Node.js containers (TypeScript) | Development |
+| `strider_studio` | Real-time observability UI | Roadmap |
 
 Install the JS package via GitHub:
 
@@ -357,6 +357,7 @@ Install the JS package via GitHub:
 ```
 
 **Status:**
+- **Roadmap** - Planned, not yet started
 - **Development** - API may change, not recommended for production
 - **Alpha** - Feature-complete but API may change
 - **Beta** - API stable, ready for production testing
