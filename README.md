@@ -72,6 +72,39 @@ end)
 
 That's it! No agent or context required for simple use cases.
 
+## The Loop
+
+An agent loop is a recursive function:
+
+```elixir
+defmodule MyAgent do
+  def run(agent, prompt, context \\ Strider.Context.new(), max_turns \\ 10)
+
+  def run(_agent, _prompt, context, 0), do: {:error, :max_turns_exceeded, context}
+
+  def run(agent, prompt, context, turns_left) do
+    case Strider.call(agent, prompt, context) do
+      {:ok, response, context} ->
+        case response.finish_reason do
+          :stop ->
+            {:ok, response.content, context}
+
+          :tool_use ->
+            result = execute_tools(response.tool_calls)
+            run(agent, "Tool result: #{result}", context, turns_left - 1)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp execute_tools(tool_calls) do
+    # Your logic here
+  end
+end
+```
+
 ## Multi-Modal Content
 
 Use `Strider.Content` for images, files, audio, and other content types:
@@ -300,39 +333,6 @@ Pool.start_link(%{
 forward "/api/anthropic", Strider.Proxy,
   target: "https://api.anthropic.com",
   request_headers: [{"x-api-key", System.get_env("ANTHROPIC_API_KEY")}]
-```
-
-## The Loop
-
-An agent loop is a recursive function:
-
-```elixir
-defmodule MyAgent do
-  def run(agent, prompt, context \\ Strider.Context.new(), max_turns \\ 10)
-
-  def run(_agent, _prompt, context, 0), do: {:error, :max_turns_exceeded, context}
-
-  def run(agent, prompt, context, turns_left) do
-    case Strider.call(agent, prompt, context) do
-      {:ok, response, context} ->
-        case response.finish_reason do
-          :stop ->
-            {:ok, response.content, context}
-
-          :tool_use ->
-            result = execute_tools(response.tool_calls)
-            run(agent, "Tool result: #{result}", context, turns_left - 1)
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp execute_tools(tool_calls) do
-    # Your logic here
-  end
-end
 ```
 
 ## Backends
