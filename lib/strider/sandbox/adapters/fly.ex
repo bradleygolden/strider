@@ -120,7 +120,7 @@ if Code.ensure_loaded?(Req) do
                 cpus: Map.get(config, :cpu, 1),
                 cpu_kind: Map.get(config, :cpu_kind, "shared")
               },
-              services: build_services(Map.get(config, :ports, [])),
+              services: Map.get(config, :services) || build_services(Map.get(config, :ports, [])),
               auto_destroy: Map.get(config, :auto_destroy, true),
               restart: %{policy: "no"}
             }
@@ -128,7 +128,7 @@ if Code.ensure_loaded?(Req) do
           |> maybe_add_region(config)
           |> maybe_add_mounts(resolved_mounts)
 
-        case Client.post("/apps/#{app_name}/machines", body, api_token) do
+        case create_machine_if_none_exist(app_name, body, api_token) do
           {:ok, %{"id" => machine_id} = response} ->
             metadata = %{
               private_ip: Map.get(response, "private_ip"),
@@ -656,6 +656,22 @@ if Code.ensure_loaded?(Req) do
 
     defp escape_path(path) do
       String.replace(path, "'", "'\\''")
+    end
+
+    defp create_machine_if_none_exist(app_name, body, api_token) do
+      case Client.get("/apps/#{app_name}/machines", api_token) do
+        {:ok, [%{"id" => existing_id} | _]} ->
+          case Client.get("/apps/#{app_name}/machines/#{existing_id}", api_token) do
+            {:ok, response} -> {:ok, response}
+            error -> error
+          end
+
+        {:ok, []} ->
+          Client.post("/apps/#{app_name}/machines", body, api_token)
+
+        {:error, _} ->
+          Client.post("/apps/#{app_name}/machines", body, api_token)
+      end
     end
 
     defp maybe_create_app(%{create_app: true} = config, app_name, api_token) do
