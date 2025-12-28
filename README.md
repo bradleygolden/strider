@@ -27,7 +27,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "81c3737"},
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "68138b6"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
@@ -305,9 +305,9 @@ alias Strider.Sandbox.Pool
 
 {:ok, pool} = Pool.start_link(%{
   adapter: Fly,
-  regions: ["ord", "ewr"],
-  target_per_region: 2,
-  build_config: fn region -> %{image: "node:22-slim", app_name: "my-sandboxes", region: region} end
+  partitions: ["ord", "ewr"],
+  target_per_partition: 2,
+  build_config: fn partition -> %{image: "node:22-slim", app_name: "my-sandboxes", region: partition} end
 })
 
 case Pool.checkout(pool, "ord") do
