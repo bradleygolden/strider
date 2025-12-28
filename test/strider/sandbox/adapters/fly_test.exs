@@ -63,6 +63,20 @@ if Code.ensure_loaded?(Req) do
       end
     end
 
+    describe "get_machine_volumes/2" do
+      test "requires api_token" do
+        assert_raise ArgumentError, ~r/api_token is required/, fn ->
+          Fly.get_machine_volumes("test-app:machine123")
+        end
+      end
+
+      test "requires valid sandbox_id format" do
+        assert_raise ArgumentError, ~r/Invalid sandbox_id/, fn ->
+          Fly.get_machine_volumes("invalid", api_token: "test")
+        end
+      end
+    end
+
     describe "create/1 mount validation" do
       test "rejects mount with missing path" do
         config = %{

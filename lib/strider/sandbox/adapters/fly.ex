@@ -356,6 +356,46 @@ if Code.ensure_loaded?(Req) do
     end
 
     @doc """
+    Gets volumes attached to a Fly machine.
+
+    Extracts volume information from the machine's mount configuration.
+
+    ## Parameters
+    - `sandbox_id` - The sandbox ID in "app_name:machine_id" format
+    - `opts` - Options including `:api_token`
+
+    ## Returns
+    - `{:ok, [%{volume: vol_id, path: path}]}` on success
+    - `{:error, :not_found}` if machine doesn't exist
+    - `{:error, reason}` on failure
+
+    ## Example
+
+        {:ok, volumes} = Fly.get_machine_volumes("my-app:machine123", api_token: token)
+        # => {:ok, [%{volume: "vol_abc123", path: "/data"}]}
+    """
+    def get_machine_volumes(sandbox_id, opts \\ []) do
+      {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
+      api_token = get_api_token!(opts)
+
+      case Client.get_machine(app_name, machine_id, api_token) do
+        {:ok, %{"config" => %{"mounts" => mounts}}} when is_list(mounts) ->
+          volumes =
+            Enum.map(mounts, fn mount ->
+              %{volume: mount["volume"], path: mount["path"]}
+            end)
+
+          {:ok, volumes}
+
+        {:ok, _} ->
+          {:ok, []}
+
+        {:error, _} = error ->
+          error
+      end
+    end
+
+    @doc """
     Waits for sandbox to become ready using Fly's native wait API + health polling.
 
     Phase 1: Waits for machine to reach "started" state via Fly API

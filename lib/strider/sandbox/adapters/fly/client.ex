@@ -86,6 +86,55 @@ if Code.ensure_loaded?(Req) do
       end
     end
 
+    @doc """
+    Lists all volumes for a Fly app.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, [%{"id" => volume_id, "name" => name, "region" => region, "attached_machine_id" => machine_id | nil, ...}]}` on success
+    - `{:error, reason}` on failure
+    """
+    def list_volumes(app_name, api_token) do
+      get("/apps/#{app_name}/volumes", api_token)
+    end
+
+    @doc """
+    Gets details for a specific volume.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `volume_id` - The volume ID
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, %{"id" => volume_id, "name" => name, "attached_machine_id" => machine_id | nil, ...}}` on success
+    - `{:error, :not_found}` if volume doesn't exist
+    - `{:error, reason}` on failure
+    """
+    def get_volume(app_name, volume_id, api_token) do
+      get("/apps/#{app_name}/volumes/#{volume_id}", api_token)
+    end
+
+    @doc """
+    Gets details for a specific machine.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `machine_id` - The machine ID
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, %{"id" => machine_id, "state" => state, "config" => %{"mounts" => [...], ...}, ...}}` on success
+    - `{:error, :not_found}` if machine doesn't exist
+    - `{:error, reason}` on failure
+    """
+    def get_machine(app_name, machine_id, api_token) do
+      get("/apps/#{app_name}/machines/#{machine_id}", api_token)
+    end
+
     defp request(method, path, body, api_token, retry_count \\ 0) do
       url = @base_url <> path
 
