@@ -28,6 +28,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 def deps do
   [
     {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "81c3737"},
+    {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
     {:req_llm, "~> 1.0"},    # optional, for Strider.Backends.ReqLLM
@@ -233,16 +234,63 @@ schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
 ## Sandbox Execution
 
 ```elixir
+alias Strider.Sandbox
 alias Strider.Sandbox.Adapters.Docker
 
-{:ok, sandbox} = Strider.Sandbox.create({Docker, image: "node:22-slim"})
-{:ok, result} = Strider.Sandbox.exec(sandbox, "node --version")
+{:ok, sandbox} = Sandbox.create({Docker, image: "node:22-slim"})
+{:ok, result} = Sandbox.exec(sandbox, "node --version")
 
-# File operations
-:ok = Strider.Sandbox.write_file(sandbox, "/app/main.js", "console.log('hello')")
-{:ok, content} = Strider.Sandbox.read_file(sandbox, "/app/main.js")
+:ok = Sandbox.write_file(sandbox, "/app/main.js", "console.log('hello')")
+{:ok, content} = Sandbox.read_file(sandbox, "/app/main.js")
 
-Strider.Sandbox.terminate(sandbox)
+Sandbox.terminate(sandbox)
+```
+
+Fly.io adapter for production:
+
+```elixir
+alias Strider.Sandbox
+alias Strider.Sandbox.Adapters.Fly
+
+{:ok, sandbox} = Sandbox.create({Fly, %{
+  image: "node:22-slim",
+  app_name: "my-sandboxes",
+  region: "ord",
+  mounts: [%{name: "data", path: "/data", size_gb: 10}]
+}})
+
+Sandbox.await_ready(sandbox, port: 4001)
+{:ok, result} = Sandbox.exec(sandbox, "node --version")
+```
+
+## Sandbox Pool
+
+Pre-warm sandboxes for fast provisioning:
+
+```elixir
+alias Strider.Sandbox.Pool
+
+{:ok, pool} = Pool.start_link(%{
+  adapter: Fly,
+  regions: ["ord", "ewr"],
+  target_per_region: 2,
+  build_config: fn region -> %{image: "node:22-slim", app_name: "my-sandboxes", region: region} end
+})
+
+case Pool.checkout(pool, "ord") do
+  {:warm, sandbox_info} -> # ~10s start from pre-warmed volume
+  {:cold, :pool_empty} -> # create from scratch
+end
+```
+
+For distributed deployments, use the Postgres store:
+
+```elixir
+Pool.start_link(%{
+  # ...
+  store: Strider.Sandbox.Pool.Store.Postgres,
+  store_config: %{repo: MyApp.Repo}
+})
 ```
 
 ## HTTP Proxy
