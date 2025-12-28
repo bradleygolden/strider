@@ -38,6 +38,7 @@ defmodule Strider.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      {:ecto_sql, "~> 3.0", optional: true},
       {:plug, "~> 1.15", optional: true},
       {:req, "~> 0.5", optional: true},
       {:req_llm, "~> 1.0", optional: true},

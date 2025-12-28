@@ -72,6 +72,16 @@ defmodule Strider.Sandbox.Adapters.Test do
     Agent.update(__MODULE__, fn _ -> %{sandboxes: %{}, responses: %{}} end)
   end
 
+  @doc """
+  Gets the config for a sandbox.
+  """
+  @spec get_config(String.t()) :: map() | nil
+  def get_config(sandbox_id) do
+    Agent.get(__MODULE__, fn state ->
+      get_in(state, [:sandboxes, sandbox_id, :config])
+    end)
+  end
+
   # Adapter callbacks
 
   @impl true
@@ -146,5 +156,44 @@ defmodule Strider.Sandbox.Adapters.Test do
        "sandbox_id" => sandbox_id,
        "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
      }}
+  end
+
+  @impl true
+  def stop(sandbox_id, _opts \\ []) do
+    Agent.update(__MODULE__, fn state ->
+      if get_in(state, [:sandboxes, sandbox_id]) do
+        put_in(state, [:sandboxes, sandbox_id, :status], :stopped)
+      else
+        state
+      end
+    end)
+
+    {:ok, %{}}
+  end
+
+  @impl true
+  def start(sandbox_id, _opts \\ []) do
+    Agent.update(__MODULE__, fn state ->
+      if get_in(state, [:sandboxes, sandbox_id]) do
+        put_in(state, [:sandboxes, sandbox_id, :status], :running)
+      else
+        state
+      end
+    end)
+
+    {:ok, %{}}
+  end
+
+  @impl true
+  def update(sandbox_id, config, _opts \\ []) do
+    Agent.update(__MODULE__, fn state ->
+      if get_in(state, [:sandboxes, sandbox_id]) do
+        put_in(state, [:sandboxes, sandbox_id, :config], config)
+      else
+        state
+      end
+    end)
+
+    {:ok, %{}}
   end
 end
