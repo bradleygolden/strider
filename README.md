@@ -27,7 +27,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "68138b6"},
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "eac4913"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
