@@ -135,6 +135,63 @@ if Code.ensure_loaded?(Req) do
       get("/apps/#{app_name}/machines/#{machine_id}", api_token)
     end
 
+    @doc """
+    Creates a new Fly app.
+
+    ## Parameters
+    - `app_name` - The app name (must be globally unique on Fly)
+    - `org_slug` - The Fly organization slug
+    - `network` - Optional custom network name for isolation (nil uses default shared network)
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, %{"name" => app_name, ...}}` on success
+    - `{:error, {:api_error, 422, "..."}}` if app already exists
+    - `{:error, reason}` on failure
+    """
+    def create_app(app_name, org_slug, network, api_token) do
+      body = %{app_name: app_name, org_slug: org_slug}
+      body = if network, do: Map.put(body, :network, network), else: body
+      post("/apps", body, api_token)
+    end
+
+    @doc """
+    Gets details for a Fly app.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, %{"name" => app_name, "organization" => %{...}, ...}}` on success
+    - `{:error, :not_found}` if app doesn't exist
+    - `{:error, reason}` on failure
+    """
+    def get_app(app_name, api_token) do
+      get("/apps/#{app_name}", api_token)
+    end
+
+    @doc """
+    Deletes a Fly app and all its resources (machines, volumes, etc).
+
+    WARNING: This is destructive and cannot be undone.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `:ok` on success (including 404 - already deleted)
+    - `{:error, reason}` on failure
+    """
+    def delete_app(app_name, api_token) do
+      case delete("/apps/#{app_name}", api_token) do
+        {:ok, _} -> :ok
+        {:error, :not_found} -> :ok
+        error -> error
+      end
+    end
+
     defp request(method, path, body, api_token, retry_count \\ 0) do
       url = @base_url <> path
 

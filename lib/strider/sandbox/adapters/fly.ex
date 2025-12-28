@@ -26,6 +26,13 @@ if Code.ensure_loaded?(Req) do
     - `:skip_launch` - Skip starting the machine (default: false). When true, machine
       is created but not started, enabling "warm pool" patterns for fast on-demand starts.
 
+    Network isolation (for multi-tenant security):
+    - `:create_app` - If true, creates a dedicated Fly app for this sandbox if it
+      doesn't exist (default: false)
+    - `:org` - Fly organization slug (required when `:create_app` is true)
+    - `:network` - Custom 6PN network name for isolation. Apps on different networks
+      cannot communicate with each other.
+
     ## Usage
 
         alias Strider.Sandbox.Adapters.Fly
@@ -98,7 +105,8 @@ if Code.ensure_loaded?(Req) do
       api_token = get_api_token!(config)
       region = Map.get(config, :region)
 
-      with {:ok, validated_mounts} <- validate_mounts(Map.get(config, :mounts)),
+      with :ok <- maybe_create_app(config, app_name, api_token),
+           {:ok, validated_mounts} <- validate_mounts(Map.get(config, :mounts)),
            {:ok, resolved_mounts, created_volume_ids} <-
              resolve_mounts(validated_mounts, app_name, region, api_token) do
         body =
@@ -179,6 +187,36 @@ if Code.ensure_loaded?(Req) do
         {:ok, _} -> :ok
         {:error, :not_found} -> :ok
         {:error, reason} -> {:error, reason}
+      end
+    end
+
+    @doc """
+    Terminates the machine and optionally deletes the Fly app.
+
+    This is a Fly-specific extension for cleaning up isolated per-tenant apps.
+
+    ## Options
+    - `:destroy_app` - If true, deletes the Fly app after destroying the machine (default: false)
+    - `:api_token` - Fly API token (optional, uses FLY_API_TOKEN env var if not provided)
+
+    ## Example
+
+        # Terminate machine only
+        Fly.terminate_with_app(sandbox_id)
+
+        # Terminate machine and delete the app
+        Fly.terminate_with_app(sandbox_id, destroy_app: true)
+    """
+    def terminate_with_app(sandbox_id, opts \\ []) do
+      {app_name, _machine_id} = parse_sandbox_id!(sandbox_id)
+
+      with :ok <- terminate(sandbox_id) do
+        if Keyword.get(opts, :destroy_app, false) do
+          api_token = get_api_token!(opts)
+          Client.delete_app(app_name, api_token)
+        else
+          :ok
+        end
       end
     end
 
@@ -618,6 +656,36 @@ if Code.ensure_loaded?(Req) do
 
     defp escape_path(path) do
       String.replace(path, "'", "'\\''")
+    end
+
+    defp maybe_create_app(%{create_app: true} = config, app_name, api_token) do
+      org =
+        Map.get(config, :org) || raise ArgumentError, "org is required when create_app is true"
+
+      network = Map.get(config, :network)
+
+      case Client.get_app(app_name, api_token) do
+        {:ok, _} -> :ok
+        {:error, :not_found} -> do_create_app(app_name, org, network, api_token)
+        {:error, reason} -> {:error, {:app_check_failed, reason}}
+      end
+    end
+
+    defp maybe_create_app(_config, _app_name, _api_token), do: :ok
+
+    defp do_create_app(app_name, org, network, api_token) do
+      case Client.create_app(app_name, org, network, api_token) do
+        {:ok, _} ->
+          :ok
+
+        {:error, {:api_error, 422, msg}} ->
+          if String.contains?(msg, "already exists"),
+            do: :ok,
+            else: {:error, {:app_creation_failed, msg}}
+
+        {:error, reason} ->
+          {:error, {:app_creation_failed, reason}}
+      end
     end
   end
 end

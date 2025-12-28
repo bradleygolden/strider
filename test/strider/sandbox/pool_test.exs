@@ -77,7 +77,7 @@ defmodule Strider.Sandbox.PoolTest do
 
   describe "checkout/2" do
     test "returns {:cold, :pool_empty} when pool is empty" do
-      config = build_config(target_per_region: 0)
+      config = build_config(target_per_partition: 0)
       {:ok, pid} = Pool.start_link(config)
 
       assert {:cold, :pool_empty} = Pool.checkout(pid, "ord")
@@ -93,7 +93,7 @@ defmodule Strider.Sandbox.PoolTest do
 
       assert {:warm, sandbox_info} = Pool.checkout(pid, "ord")
       assert is_binary(sandbox_info.sandbox_id)
-      assert sandbox_info.region == "ord"
+      assert sandbox_info.partition == "ord"
 
       GenServer.stop(pid)
     end
@@ -141,8 +141,8 @@ defmodule Strider.Sandbox.PoolTest do
   end
 
   describe "status/1" do
-    test "returns pool counts per region" do
-      config = build_config(regions: ["ord", "ewr"])
+    test "returns pool counts per partition" do
+      config = build_config(partitions: ["ord", "ewr"])
       {:ok, pid} = Pool.start_link(config)
 
       wait_for_pool_size(pid, "ord", 1)
@@ -155,8 +155,8 @@ defmodule Strider.Sandbox.PoolTest do
   end
 
   describe "replenish" do
-    test "fills pool to target_per_region" do
-      config = build_config(target_per_region: 2)
+    test "fills pool to target_per_partition" do
+      config = build_config(target_per_partition: 2)
       {:ok, pid} = Pool.start_link(config)
 
       wait_for_pool_size(pid, "ord", 2)
@@ -200,7 +200,7 @@ defmodule Strider.Sandbox.PoolTest do
       sandbox_config = TestAdapter.get_config(sandbox_info.sandbox_id)
 
       assert sandbox_config.env["STRIDER_POOL"] == "true"
-      assert sandbox_config.env["STRIDER_POOL_REGION"] == "ord"
+      assert sandbox_config.env["STRIDER_POOL_PARTITION"] == "ord"
 
       GenServer.stop(pid)
     end
@@ -240,7 +240,7 @@ defmodule Strider.Sandbox.PoolTest do
     end
 
     test "returns {:cold, :pool_empty} when pool is empty" do
-      config = build_config(target_per_region: 0)
+      config = build_config(target_per_partition: 0)
       {:ok, pid} = Pool.start_link(config)
 
       assert {:cold, :pool_empty} = Pool.claim(pid, "ord", %{env: %{}})
@@ -269,11 +269,11 @@ defmodule Strider.Sandbox.PoolTest do
   defp build_config(overrides \\ []) do
     defaults = %{
       adapter: TestAdapter,
-      regions: ["ord"],
-      target_per_region: 1,
+      partitions: ["ord"],
+      target_per_partition: 1,
       max_age_ms: :timer.hours(4),
       replenish_interval_ms: 100,
-      build_config: fn region -> %{image: "test:latest", region: region} end,
+      build_config: fn partition -> %{image: "test:latest", partition: partition} end,
       health_port: 4001,
       health_timeout_ms: 1000
     }
@@ -281,24 +281,24 @@ defmodule Strider.Sandbox.PoolTest do
     Map.merge(defaults, Map.new(overrides))
   end
 
-  defp wait_for_pool_size(pid, region, target_size, timeout \\ 5000) do
+  defp wait_for_pool_size(pid, partition, target_size, timeout \\ 5000) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    do_wait_for_pool_size(pid, region, target_size, deadline)
+    do_wait_for_pool_size(pid, partition, target_size, deadline)
   end
 
-  defp do_wait_for_pool_size(pid, region, target_size, deadline) do
+  defp do_wait_for_pool_size(pid, partition, target_size, deadline) do
     if System.monotonic_time(:millisecond) > deadline do
-      flunk("Timeout waiting for pool size #{target_size} in region #{region}")
+      flunk("Timeout waiting for pool size #{target_size} in partition #{partition}")
     end
 
     status = Pool.status(pid)
-    current_size = get_in(status, [:pool, region]) || 0
+    current_size = get_in(status, [:pool, partition]) || 0
 
     if current_size >= target_size do
       :ok
     else
       Process.sleep(50)
-      do_wait_for_pool_size(pid, region, target_size, deadline)
+      do_wait_for_pool_size(pid, partition, target_size, deadline)
     end
   end
 end

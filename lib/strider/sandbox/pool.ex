@@ -9,11 +9,11 @@ defmodule Strider.Sandbox.Pool do
 
       config = %{
         adapter: Strider.Sandbox.Adapters.Fly,
-        regions: ["ord", "ewr"],
-        target_per_region: 1,
+        partitions: ["ord", "ewr"],  # or ["tenant-123:ord", "tenant-456:ewr"] for multi-tenant
+        target_per_partition: 1,
         max_age_ms: :timer.hours(4),
         replenish_interval_ms: :timer.minutes(1),
-        build_config: fn region -> %{image: ..., app_name: ..., region: region} end,
+        build_config: fn partition -> %{image: ..., app_name: ..., region: partition} end,
         health_port: 4001,
         health_timeout_ms: 120_000,
         store: Strider.Sandbox.Pool.Store.Memory,  # optional, defaults to Memory
@@ -26,7 +26,7 @@ defmodule Strider.Sandbox.Pool do
 
       case Strider.Sandbox.Pool.checkout(MyPool, "ord") do
         {:warm, sandbox_info} ->
-          # sandbox_info contains: %{sandbox_id: "...", private_ip: "...", region: "...", metadata: %{}}
+          # sandbox_info contains: %{sandbox_id: "...", private_ip: "...", partition: "...", metadata: %{}}
           sandbox = Strider.Sandbox.from_id(Fly, sandbox_info.sandbox_id, config, sandbox_info.metadata)
           Strider.Sandbox.start(sandbox)
 
@@ -44,8 +44,8 @@ defmodule Strider.Sandbox.Pool do
 
   @type config :: %{
           adapter: module(),
-          regions: [String.t()],
-          target_per_region: pos_integer(),
+          partitions: [String.t()],
+          target_per_partition: pos_integer(),
           max_age_ms: pos_integer(),
           replenish_interval_ms: pos_integer(),
           build_config: (String.t() -> map()),
@@ -58,7 +58,7 @@ defmodule Strider.Sandbox.Pool do
   @type sandbox_info :: %{
           sandbox_id: String.t(),
           private_ip: String.t() | nil,
-          region: String.t(),
+          partition: String.t(),
           metadata: map(),
           created_at: integer()
         }
@@ -90,13 +90,13 @@ defmodule Strider.Sandbox.Pool do
   end
 
   @doc """
-  Checks out a warm sandbox from the pool for the given region.
+  Checks out a warm sandbox from the pool for the given partition.
 
   Returns `{:warm, sandbox_info}` if available, `{:cold, :pool_empty}` otherwise.
   """
   @spec checkout(GenServer.server(), String.t()) :: checkout_result()
-  def checkout(pool, region) do
-    GenServer.call(pool, {:checkout, region}, 10_000)
+  def checkout(pool, partition) do
+    GenServer.call(pool, {:checkout, partition}, 10_000)
   end
 
   @doc """
@@ -111,7 +111,7 @@ defmodule Strider.Sandbox.Pool do
 
   ## Example
 
-      case Pool.claim(MyPool, "ord", %{env: %{"API_KEY" => "real-key"}}) do
+      case Pool.claim(MyPool, "tenant-123:ord", %{env: %{"API_KEY" => "real-key"}}) do
         {:warm, sandbox} ->
           Sandbox.start(sandbox)
           # sandbox is now running with real config
@@ -126,8 +126,8 @@ defmodule Strider.Sandbox.Pool do
   """
   @spec claim(GenServer.server(), String.t(), map(), keyword()) ::
           {:warm, Sandbox.Instance.t()} | {:cold, :pool_empty} | {:error, term()}
-  def claim(pool, region, update_config, opts \\ []) do
-    GenServer.call(pool, {:claim, region, update_config, opts}, 15_000)
+  def claim(pool, partition, update_config, opts \\ []) do
+    GenServer.call(pool, {:claim, partition, update_config, opts}, 15_000)
   end
 
   @doc """
@@ -136,6 +136,36 @@ defmodule Strider.Sandbox.Pool do
   @spec status(GenServer.server()) :: pool_status()
   def status(pool) do
     GenServer.call(pool, :status)
+  end
+
+  @doc """
+  Registers a new partition to be managed by the pool.
+
+  The pool will begin warming sandboxes for this partition on the next replenish cycle.
+  Useful for dynamic multi-tenant scenarios where partitions are added at runtime.
+
+  ## Example
+
+      Pool.register_partition(MyPool, "tenant-123:ord")
+  """
+  @spec register_partition(GenServer.server(), String.t()) :: :ok
+  def register_partition(pool, partition) do
+    GenServer.call(pool, {:register_partition, partition})
+  end
+
+  @doc """
+  Unregisters a partition from the pool.
+
+  ## Options
+  - `:cleanup` - If true, terminates all warm sandboxes for this partition (default: false)
+
+  ## Example
+
+      Pool.unregister_partition(MyPool, "tenant-123:ord", cleanup: true)
+  """
+  @spec unregister_partition(GenServer.server(), String.t(), keyword()) :: :ok
+  def unregister_partition(pool, partition, opts \\ []) do
+    GenServer.call(pool, {:unregister_partition, partition, opts})
   end
 
   @doc """
@@ -161,12 +191,12 @@ defmodule Strider.Sandbox.Pool do
 
     store_config =
       validated_config.store_config
-      |> Map.put(:partitions, validated_config.regions)
+      |> Map.put(:partitions, validated_config.partitions)
 
     case store.init(store_config) do
       {:ok, store_ref} ->
         Logger.info(
-          "[Pool] Starting sandbox pool for regions: #{inspect(validated_config.regions)}"
+          "[Pool] Starting sandbox pool for partitions: #{inspect(validated_config.partitions)}"
         )
 
         send(self(), :replenish)
@@ -185,11 +215,14 @@ defmodule Strider.Sandbox.Pool do
   end
 
   @impl true
-  def handle_call({:checkout, region}, _from, state) do
+  def handle_call({:checkout, partition}, _from, state) do
     start_time = System.monotonic_time()
-    emit_telemetry([:checkout, :start], %{system_time: System.system_time()}, %{region: region})
 
-    {result, state} = pop_warm_sandbox(state, region)
+    emit_telemetry([:checkout, :start], %{system_time: System.system_time()}, %{
+      partition: partition
+    })
+
+    {result, state} = pop_warm_sandbox(state, partition)
 
     state =
       case result do
@@ -210,18 +243,21 @@ defmodule Strider.Sandbox.Pool do
     duration = System.monotonic_time() - start_time
 
     emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-      region: region,
+      partition: partition,
       result: result_type
     })
 
     {:reply, result, state}
   end
 
-  def handle_call({:claim, region, update_config, opts}, _from, state) do
+  def handle_call({:claim, partition, update_config, opts}, _from, state) do
     start_time = System.monotonic_time()
-    emit_telemetry([:checkout, :start], %{system_time: System.system_time()}, %{region: region})
 
-    {result, state} = pop_warm_sandbox(state, region)
+    emit_telemetry([:checkout, :start], %{system_time: System.system_time()}, %{
+      partition: partition
+    })
+
+    {result, state} = pop_warm_sandbox(state, partition)
 
     case result do
       {:warm, sandbox_info} ->
@@ -239,7 +275,7 @@ defmodule Strider.Sandbox.Pool do
             duration = System.monotonic_time() - start_time
 
             emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-              region: region,
+              partition: partition,
               result: :warm
             })
 
@@ -249,7 +285,7 @@ defmodule Strider.Sandbox.Pool do
             duration = System.monotonic_time() - start_time
 
             emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-              region: region,
+              partition: partition,
               result: :error
             })
 
@@ -260,7 +296,7 @@ defmodule Strider.Sandbox.Pool do
         duration = System.monotonic_time() - start_time
 
         emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-          region: region,
+          partition: partition,
           result: :cold
         })
 
@@ -275,6 +311,35 @@ defmodule Strider.Sandbox.Pool do
     {:reply, status, state}
   end
 
+  def handle_call({:register_partition, partition}, _from, state) do
+    Logger.info("[Pool] Registering partition: #{partition}")
+
+    current_partitions = state.config.partitions
+
+    if partition in current_partitions do
+      {:reply, :ok, state}
+    else
+      new_partitions = [partition | current_partitions]
+      new_config = %{state.config | partitions: new_partitions}
+      send(self(), :replenish)
+      {:reply, :ok, %{state | config: new_config}}
+    end
+  end
+
+  def handle_call({:unregister_partition, partition, opts}, _from, state) do
+    Logger.info("[Pool] Unregistering partition: #{partition}")
+
+    new_partitions = Enum.reject(state.config.partitions, &(&1 == partition))
+    new_config = %{state.config | partitions: new_partitions}
+    new_state = %{state | config: new_config}
+
+    if Keyword.get(opts, :cleanup, false) do
+      spawn(fn -> cleanup_partition(state, partition) end)
+    end
+
+    {:reply, :ok, new_state}
+  end
+
   @impl true
   def handle_info(:replenish, state) do
     state = ensure_pool_filled(state)
@@ -282,19 +347,19 @@ defmodule Strider.Sandbox.Pool do
     {:noreply, state}
   end
 
-  def handle_info({:sandbox_created, region, sandbox_info}, state) do
-    Logger.info("[Pool] Warm sandbox created for #{region}: #{sandbox_info.sandbox_id}")
+  def handle_info({:sandbox_created, partition, sandbox_info}, state) do
+    Logger.info("[Pool] Warm sandbox created for #{partition}: #{sandbox_info.sandbox_id}")
 
     entry = to_entry(sandbox_info)
     :ok = state.store.push(state.store_ref, entry)
-    :ok = state.store.set_pending(state.store_ref, region, false)
+    :ok = state.store.set_pending(state.store_ref, partition, false)
 
     {:noreply, state}
   end
 
-  def handle_info({:sandbox_failed, region, reason}, state) do
-    Logger.warning("[Pool] Failed to create warm sandbox for #{region}: #{inspect(reason)}")
-    :ok = state.store.set_pending(state.store_ref, region, false)
+  def handle_info({:sandbox_failed, partition, reason}, state) do
+    Logger.warning("[Pool] Failed to create warm sandbox for #{partition}: #{inspect(reason)}")
+    :ok = state.store.set_pending(state.store_ref, partition, false)
     {:noreply, state}
   end
 
@@ -307,7 +372,7 @@ defmodule Strider.Sandbox.Pool do
   # Private Functions
 
   defp validate_config!(config) do
-    required_keys = [:adapter, :regions, :build_config]
+    required_keys = [:adapter, :partitions, :build_config]
 
     for key <- required_keys do
       unless Map.has_key?(config, key) do
@@ -317,8 +382,8 @@ defmodule Strider.Sandbox.Pool do
 
     %{
       adapter: Map.fetch!(config, :adapter),
-      regions: Map.fetch!(config, :regions),
-      target_per_region: Map.get(config, :target_per_region, 1),
+      partitions: Map.fetch!(config, :partitions),
+      target_per_partition: Map.get(config, :target_per_partition, 1),
       max_age_ms: Map.get(config, :max_age_ms, :timer.hours(4)),
       replenish_interval_ms: Map.get(config, :replenish_interval_ms, :timer.minutes(1)),
       build_config: Map.fetch!(config, :build_config),
@@ -329,58 +394,61 @@ defmodule Strider.Sandbox.Pool do
     }
   end
 
-  defp pop_warm_sandbox(state, region) do
-    case state.store.pop(state.store_ref, region, state.config.max_age_ms) do
+  defp pop_warm_sandbox(state, partition) do
+    case state.store.pop(state.store_ref, partition, state.config.max_age_ms) do
       {:ok, entry} ->
         sandbox_info = from_entry(entry)
 
         Logger.info(
-          "[Pool] Checked out warm sandbox #{sandbox_info.sandbox_id} for region #{region}"
+          "[Pool] Checked out warm sandbox #{sandbox_info.sandbox_id} for partition #{partition}"
         )
 
         {{:warm, sandbox_info}, state}
 
       {:empty, :pool_empty} ->
-        Logger.debug("[Pool] No warm sandbox available for region #{region}")
+        Logger.debug("[Pool] No warm sandbox available for partition #{partition}")
         {{:cold, :pool_empty}, state}
     end
   end
 
   defp ensure_pool_filled(state) do
-    Enum.each(state.config.regions, fn region ->
-      current_count = state.store.count(state.store_ref, region)
-      pending? = state.store.pending?(state.store_ref, region)
+    Enum.each(state.config.partitions, fn partition ->
+      current_count = state.store.count(state.store_ref, partition)
+      pending? = state.store.pending?(state.store_ref, partition)
 
-      if current_count < state.config.target_per_region and not pending? do
-        spawn_warm_sandbox(state, region)
+      if current_count < state.config.target_per_partition and not pending? do
+        spawn_warm_sandbox(state, partition)
       end
     end)
 
     state
   end
 
-  defp spawn_warm_sandbox(state, region) do
+  defp spawn_warm_sandbox(state, partition) do
     parent = self()
     config = state.config
 
-    :ok = state.store.set_pending(state.store_ref, region, true)
+    :ok = state.store.set_pending(state.store_ref, partition, true)
 
     Task.start(fn ->
-      case create_warm_sandbox(config, region) do
+      case create_warm_sandbox(config, partition) do
         {:ok, sandbox_info} ->
-          send(parent, {:sandbox_created, region, sandbox_info})
+          send(parent, {:sandbox_created, partition, sandbox_info})
 
         {:error, reason} ->
-          send(parent, {:sandbox_failed, region, reason})
+          send(parent, {:sandbox_failed, partition, reason})
       end
     end)
   end
 
-  defp create_warm_sandbox(config, region) do
-    sandbox_config = config.build_config.(region)
-    sandbox_config = inject_pool_markers(sandbox_config, region)
+  defp create_warm_sandbox(config, partition) do
+    sandbox_config = config.build_config.(partition)
+    sandbox_config = inject_pool_markers(sandbox_config, partition)
 
-    emit_telemetry([:create, :start], %{system_time: System.system_time()}, %{region: region})
+    emit_telemetry([:create, :start], %{system_time: System.system_time()}, %{
+      partition: partition
+    })
+
     start_time = System.monotonic_time()
 
     with {:ok, sandbox} <- Sandbox.create({config.adapter, sandbox_config}),
@@ -393,7 +461,7 @@ defmodule Strider.Sandbox.Pool do
       sandbox_info = %{
         sandbox_id: sandbox.id,
         private_ip: Map.get(sandbox.metadata, :private_ip),
-        region: region,
+        partition: partition,
         metadata: sandbox.metadata,
         created_at: System.monotonic_time(:millisecond)
       }
@@ -401,7 +469,7 @@ defmodule Strider.Sandbox.Pool do
       duration = System.monotonic_time() - start_time
 
       emit_telemetry([:create, :stop], %{duration: duration}, %{
-        region: region,
+        partition: partition,
         sandbox_id: sandbox.id
       })
 
@@ -409,7 +477,7 @@ defmodule Strider.Sandbox.Pool do
     else
       {:error, reason} = error ->
         emit_telemetry([:create, :error], %{system_time: System.system_time()}, %{
-          region: region,
+          partition: partition,
           reason: reason
         })
 
@@ -421,14 +489,34 @@ defmodule Strider.Sandbox.Pool do
     Process.send_after(self(), :replenish, interval_ms)
   end
 
+  defp cleanup_partition(state, partition) do
+    case state.store.pop(state.store_ref, partition, :infinity) do
+      {:ok, entry} ->
+        sandbox = Sandbox.from_id(state.config.adapter, entry.id, %{}, entry.data.metadata || %{})
+
+        case Sandbox.terminate(sandbox) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("[Pool] Failed to terminate sandbox: #{inspect(reason)}")
+        end
+
+        cleanup_partition(state, partition)
+
+      {:empty, :pool_empty} ->
+        :ok
+    end
+  end
+
   defp emit_telemetry(event, measurements, metadata) do
     :telemetry.execute([:strider, :pool] ++ event, measurements, metadata)
   end
 
-  defp inject_pool_markers(sandbox_config, region) do
+  defp inject_pool_markers(sandbox_config, partition) do
     pool_env = %{
       "STRIDER_POOL" => "true",
-      "STRIDER_POOL_REGION" => region
+      "STRIDER_POOL_PARTITION" => partition
     }
 
     existing_env = Map.get(sandbox_config, :env, %{})
@@ -438,7 +526,7 @@ defmodule Strider.Sandbox.Pool do
   defp to_entry(sandbox_info) do
     %{
       id: sandbox_info.sandbox_id,
-      partition_key: sandbox_info.region,
+      partition_key: sandbox_info.partition,
       data: %{
         private_ip: sandbox_info.private_ip,
         metadata: sandbox_info.metadata
@@ -450,7 +538,7 @@ defmodule Strider.Sandbox.Pool do
   defp from_entry(entry) do
     %{
       sandbox_id: entry.id,
-      region: entry.partition_key,
+      partition: entry.partition_key,
       private_ip: entry.data.private_ip,
       metadata: entry.data.metadata,
       created_at: entry.created_at
