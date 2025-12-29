@@ -33,6 +33,12 @@ if Code.ensure_loaded?(Req) do
     - `:network` - Custom 6PN network name for isolation. Apps on different networks
       cannot communicate with each other.
 
+    External proxy isolation (recommended for credential security):
+    - `:proxy_ip` - IP address of external proxy for sandboxed network access.
+      When set, `STRIDER_PROXY_IP` env var is passed to the container.
+    - `:proxy_port` - Port of external proxy (default: 4000).
+      When proxy_ip is set, `STRIDER_PROXY_PORT` env var is passed to the container.
+
     ## Usage
 
         alias Strider.Sandbox.Adapters.Fly
@@ -605,9 +611,28 @@ if Code.ensure_loaded?(Req) do
     end
 
     defp build_env(config) do
-      config
-      |> Map.get(:env, [])
-      |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
+      base_env =
+        config
+        |> Map.get(:env, [])
+        |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
+
+      # Add proxy configuration if specified
+      base_env
+      |> maybe_add_proxy_env(config)
+    end
+
+    defp maybe_add_proxy_env(env, config) do
+      case Map.get(config, :proxy_ip) do
+        nil ->
+          env
+
+        proxy_ip ->
+          proxy_port = Map.get(config, :proxy_port, 4000)
+
+          env
+          |> Map.put("STRIDER_PROXY_IP", to_string(proxy_ip))
+          |> Map.put("STRIDER_PROXY_PORT", to_string(proxy_port))
+      end
     end
 
     defp build_services([]), do: []
