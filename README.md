@@ -29,7 +29,7 @@ def deps do
   [
     {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "ceba5cb"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
-    {:plug, "~> 1.15"},      # optional, for Strider.Proxy
+    {:plug, "~> 1.15"},      # optional, for Strider.Proxy.Sandbox
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
     {:req_llm, "~> 1.0"},    # optional, for Strider.Backends.ReqLLM
     {:solid, "~> 0.15"},     # optional, for Strider.Prompt.Solid
@@ -326,14 +326,30 @@ Pool.start_link(%{
 })
 ```
 
-## HTTP Proxy
+## Sandbox Proxy
+
+A security-focused HTTP proxy for sandboxed environments with domain allowlisting and credential injection:
 
 ```elixir
-# In your router
-forward "/api/anthropic", Strider.Proxy,
-  target: "https://api.anthropic.com",
-  request_headers: [{"x-api-key", System.get_env("ANTHROPIC_API_KEY")}]
+# In your Phoenix router
+defmodule MyAppWeb.Router do
+  use MyAppWeb, :router
+
+  forward "/proxy", Strider.Proxy.Sandbox,
+    allowed_domains: ["api.anthropic.com", "api.github.com", "*.openai.com"],
+    credentials: %{
+      "api.anthropic.com" => [
+        {"x-api-key", System.get_env("ANTHROPIC_API_KEY")},
+        {"anthropic-version", "2023-06-01"}
+      ],
+      "api.github.com" => [
+        {"authorization", "Bearer #{System.get_env("GITHUB_TOKEN")}"}
+      ]
+    }
+end
 ```
+
+Sandboxes send requests with the target URL in the path: `POST http://proxy:4000/proxy/https://api.anthropic.com/v1/messages`
 
 ## Backends
 
