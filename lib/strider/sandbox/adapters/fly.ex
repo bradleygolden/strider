@@ -435,6 +435,56 @@ if Code.ensure_loaded?(Req) do
     end
 
     @doc """
+    Lists all volumes for a Fly app.
+
+    Returns volume details including attachment status, useful for finding
+    unattached volumes to recover terminated machines.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `opts` - Options including `:api_token`
+
+    ## Returns
+    - `{:ok, [volume]}` on success where each volume is:
+      - `id` - Volume ID (e.g., "vol_xxx")
+      - `name` - Volume name
+      - `state` - Volume state ("created", "attached", etc.)
+      - `attached_machine_id` - Machine ID if attached, nil otherwise
+      - `region` - Region code
+      - `size_gb` - Size in GB
+      - `created_at` - ISO8601 timestamp
+    - `{:error, reason}` on failure
+
+    ## Example
+
+        {:ok, volumes} = Fly.list_volumes("my-app", api_token: token)
+        unattached = Enum.find(volumes, & is_nil(&1.attached_machine_id))
+    """
+    def list_volumes(app_name, opts \\ []) do
+      api_token = get_api_token!(opts)
+
+      case Client.list_volumes(app_name, api_token) do
+        {:ok, volumes} ->
+          {:ok, Enum.map(volumes, &transform_volume/1)}
+
+        {:error, _} = error ->
+          error
+      end
+    end
+
+    defp transform_volume(vol) do
+      %{
+        id: vol["id"],
+        name: vol["name"],
+        state: vol["state"],
+        attached_machine_id: vol["attached_machine_id"],
+        region: vol["region"],
+        size_gb: vol["size_gb"],
+        created_at: vol["created_at"]
+      }
+    end
+
+    @doc """
     Waits for sandbox to become ready using Fly's native wait API + health polling.
 
     Phase 1: Waits for machine to reach "started" state via Fly API
