@@ -231,6 +231,7 @@ if Code.ensure_loaded?(Req) do
       case Client.get("/apps/#{app_name}/machines/#{machine_id}", api_token) do
         {:ok, %{"state" => "started"}} -> :running
         {:ok, %{"state" => "stopped"}} -> :stopped
+        {:ok, %{"state" => "suspended"}} -> :stopped
         {:ok, %{"state" => "destroyed"}} -> :terminated
         {:ok, %{"state" => "destroying"}} -> :terminated
         {:error, :not_found} -> :terminated
