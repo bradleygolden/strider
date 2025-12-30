@@ -142,12 +142,10 @@ if Code.ensure_loaded?(Plug) do
       filtered ++ credentials
     end
 
-    defp streaming_request?(body) when is_binary(body) do
+    defp streaming_request?(body) do
       String.contains?(body, "\"stream\":true") or
         String.contains?(body, "\"stream\": true")
     end
-
-    defp streaming_request?(_), do: false
 
     defp stream_request(conn, url, headers, body, timeout) do
       conn =

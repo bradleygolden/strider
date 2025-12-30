@@ -78,8 +78,9 @@ defmodule Strider.Backends.Mock do
   @impl true
   def introspect do
     %{
-      name: "mock",
-      version: "1.0.0",
+      provider: "mock",
+      model: "mock",
+      operation: :chat,
       capabilities: [:streaming, :deterministic]
     }
   end

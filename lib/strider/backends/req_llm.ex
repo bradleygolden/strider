@@ -114,11 +114,10 @@ if Code.ensure_loaded?(ReqLLM) do
       req_messages = Enum.map(messages, &to_req_llm_message/1)
 
       case ReqLLM.stream_text(model, req_messages, options) do
-        {:ok, response} ->
-          # ReqLLM returns a Response with stream field
+        {:ok, stream_response} ->
           text_stream =
-            response
-            |> ReqLLM.Response.text_stream()
+            stream_response
+            |> ReqLLM.StreamResponse.tokens()
             |> Stream.map(fn text ->
               %{content: text, metadata: %{backend: :req_llm}}
             end)
@@ -188,14 +187,12 @@ if Code.ensure_loaded?(ReqLLM) do
     defp maybe_parse_struct(_schema, object), do: object
 
     defp build_metadata(response, model, raw_finish_reason) do
-      {provider, model_name} = parse_model_string(model)
+      {provider, _model_name} = parse_model_string(model)
 
       %{
-        # Standardized keys (OpenTelemetry GenAI conventions)
         provider: provider,
-        model: extract_response_model(response) || model_name,
-        response_id: extract_response_id(response),
-        # Legacy/additional keys
+        model: response.model,
+        response_id: response.id,
         raw_finish_reason: raw_finish_reason
       }
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
@@ -209,29 +206,15 @@ if Code.ensure_loaded?(ReqLLM) do
       end
     end
 
-    defp parse_model_string(_model), do: {"unknown", "unknown"}
+    defp extract_content(%ReqLLM.Response{message: nil}), do: nil
+    defp extract_content(%ReqLLM.Response{message: %{content: content}}), do: content
 
-    defp extract_response_id(%{id: id}) when is_binary(id), do: id
-    defp extract_response_id(_), do: nil
-
-    defp extract_response_model(%{model: model}) when is_binary(model), do: model
-    defp extract_response_model(_), do: nil
-
-    # Extract content from ReqLLM response, preserving structure
-    defp extract_content(%{message: nil}), do: nil
-    defp extract_content(%{message: %{content: content}}), do: content
-    defp extract_content(_response), do: nil
-
-    defp normalize_finish_reason("stop"), do: :stop
-    defp normalize_finish_reason("end_turn"), do: :stop
-    defp normalize_finish_reason("tool_use"), do: :tool_use
-    defp normalize_finish_reason("tool_calls"), do: :tool_use
-    defp normalize_finish_reason("max_tokens"), do: :max_tokens
-    defp normalize_finish_reason("length"), do: :max_tokens
-    defp normalize_finish_reason("content_filter"), do: :content_filter
+    defp normalize_finish_reason(:stop), do: :stop
+    defp normalize_finish_reason(:length), do: :max_tokens
+    defp normalize_finish_reason(:tool_calls), do: :tool_use
+    defp normalize_finish_reason(:content_filter), do: :content_filter
+    defp normalize_finish_reason(:error), do: :error
     defp normalize_finish_reason(nil), do: nil
-    defp normalize_finish_reason(other) when is_atom(other), do: other
-    defp normalize_finish_reason(other) when is_binary(other), do: String.to_atom(other)
 
     defp normalize_usage(usage) when is_map(usage) do
       %{
