@@ -184,14 +184,13 @@ if Code.ensure_loaded?(Req) do
       }
 
       case Client.post("/apps/#{app_name}/machines/#{machine_id}/exec", body, api_token) do
-        {:ok, %{"stdout" => stdout, "stderr" => stderr, "exit_code" => exit_code}} ->
-          {:ok, %ExecResult{stdout: stdout || "", stderr: stderr || "", exit_code: exit_code}}
-
-        {:ok, %{"stdout" => stdout, "exit_code" => exit_code}} ->
-          {:ok, %ExecResult{stdout: stdout || "", exit_code: exit_code}}
-
-        {:error, :timeout} ->
-          {:error, :timeout}
+        {:ok, %{"exit_code" => exit_code} = result} ->
+          {:ok,
+           %ExecResult{
+             stdout: result["stdout"] || "",
+             stderr: result["stderr"] || "",
+             exit_code: exit_code
+           }}
 
         {:error, reason} ->
           {:error, reason}
