@@ -423,8 +423,9 @@ defmodule Strider.Sandbox.Pool do
   end
 
   defp create_warm_sandbox(config, partition) do
-    sandbox_config = config.build_config.(partition)
-    sandbox_config = inject_pool_markers(sandbox_config, partition)
+    sandbox_config =
+      config.build_config.(partition)
+      |> inject_pool_markers(partition)
 
     emit_telemetry([:create, :start], %{system_time: System.system_time()}, %{
       partition: partition
