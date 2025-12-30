@@ -266,19 +266,33 @@ schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
 
 ## Sandbox Execution
 
-Sandboxes provide isolated code execution with **no network access by default** (maximum security).
+Sandboxes provide isolated code execution with **no network access by default**.
+
+The default sandbox image (`ghcr.io/bradleygolden/strider-sandbox`) includes:
+- **Python 3** and **Node.js** runtimes
+- **Network isolation** via iptables (no outbound traffic)
+- **Non-root execution** (runs as `sandbox` user)
 
 ```elixir
 alias Strider.Sandbox
 alias Strider.Sandbox.Adapters.Docker
 
-# Simple isolated execution - no network, uses default strider sandbox image
+# Uses default sandbox image - no network access
 {:ok, sandbox} = Sandbox.create(Docker)
 {:ok, result} = Sandbox.exec(sandbox, "python3 -c 'print(1+1)'")
+{:ok, result} = Sandbox.exec(sandbox, "node -e 'console.log(1+1)'")
+
+# Pin to a specific image version (recommended for production)
+{:ok, sandbox} = Sandbox.create({Docker, %{
+  image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"
+}})
+
+# Use a custom image (note: no network isolation unless image supports it)
+{:ok, sandbox} = Sandbox.create({Docker, %{image: "node:22-slim"}})
 
 # File operations
-:ok = Sandbox.write_file(sandbox, "/app/main.js", "console.log('hello')")
-{:ok, content} = Sandbox.read_file(sandbox, "/app/main.js")
+:ok = Sandbox.write_file(sandbox, "/workspace/main.js", "console.log('hello')")
+{:ok, content} = Sandbox.read_file(sandbox, "/workspace/main.js")
 
 Sandbox.terminate(sandbox)
 ```
@@ -287,7 +301,7 @@ Enable controlled network access through a proxy (see [Sandbox Proxy](#sandbox-p
 
 ```elixir
 # Create sandbox with proxy access
-{:ok, sandbox} = Sandbox.create(Docker, proxy: [ip: "172.17.0.1", port: 4000])
+{:ok, sandbox} = Sandbox.create({Docker, %{proxy: [ip: "172.17.0.1", port: 4000]}})
 ```
 
 Fly.io adapter for production:
