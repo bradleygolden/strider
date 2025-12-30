@@ -66,12 +66,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
   @impl true
   def exec(container_id, command, opts) do
     timeout = Keyword.get(opts, :timeout, @default_exec_timeout_ms)
-    workdir = Keyword.get(opts, :workdir)
-    user = Keyword.get(opts, :user, "sandbox")
-
-    args = ["exec", "-u", user]
-    args = if workdir, do: args ++ ["-w", workdir], else: args
-    args = args ++ [container_id, "sh", "-c", command]
+    args = build_exec_args(container_id, command, opts)
 
     task = Task.async(fn -> System.cmd("docker", args, stderr_to_stdout: true) end)
 
@@ -83,6 +78,17 @@ defmodule Strider.Sandbox.Adapters.Docker do
         {:error, :timeout}
     end
   end
+
+  defp build_exec_args(container_id, command, opts) do
+    user = Keyword.get(opts, :user, "sandbox")
+
+    ["exec", "-u", user]
+    |> maybe_add_workdir(Keyword.get(opts, :workdir))
+    |> Kernel.++([container_id, "sh", "-c", command])
+  end
+
+  defp maybe_add_workdir(args, nil), do: args
+  defp maybe_add_workdir(args, workdir), do: args ++ ["-w", workdir]
 
   @impl true
   def terminate(container_id, _opts \\ []) do
