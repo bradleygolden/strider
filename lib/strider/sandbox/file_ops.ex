@@ -32,7 +32,6 @@ defmodule Strider.Sandbox.FileOps do
 
   defp extract_error(result, default \\ :file_not_found)
   defp extract_error(%{stderr: err}, _) when is_binary(err) and err != "", do: {:error, err}
-  defp extract_error(%{stdout: err}, _) when is_binary(err) and err != "", do: {:error, err}
   defp extract_error(%{exit_code: code}, default), do: {:error, default || {:exit_code, code}}
 
   @doc """
