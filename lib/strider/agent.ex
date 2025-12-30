@@ -72,9 +72,8 @@ defmodule Strider.Agent do
   """
 
   @type backend_type :: atom() | module()
-  @type backend_config :: term()
-  @type backend ::
-          {backend_type(), backend_config()} | {backend_type(), backend_config(), keyword()}
+  @type backend_config :: map()
+  @type backend :: {backend_type(), backend_config()}
 
   @type hooks :: module() | [module()] | nil
 
@@ -98,15 +97,15 @@ defmodule Strider.Agent do
 
       # Mock backend (built-in)
       iex> Strider.Agent.new({:mock, response: "Hello!"})
-      %Strider.Agent{backend: {:mock, [response: "Hello!"]}, system_prompt: nil, config: %{}}
+      %Strider.Agent{backend: {:mock, %{response: "Hello!"}}, system_prompt: nil, config: %{}}
 
       # With options
       iex> Strider.Agent.new({:mock, response: "Hi"}, system_prompt: "You are helpful.")
-      %Strider.Agent{backend: {:mock, [response: "Hi"]}, system_prompt: "You are helpful.", config: %{}}
+      %Strider.Agent{backend: {:mock, %{response: "Hi"}}, system_prompt: "You are helpful.", config: %{}}
 
       # Pure keyword style
       iex> Strider.Agent.new(backend: {:mock, response: "Test"}, system_prompt: "You are helpful.")
-      %Strider.Agent{backend: {:mock, [response: "Test"]}, system_prompt: "You are helpful.", config: %{}}
+      %Strider.Agent{backend: {:mock, %{response: "Test"}}, system_prompt: "You are helpful.", config: %{}}
 
   """
   @spec new(backend() | keyword()) :: t()
@@ -115,20 +114,25 @@ defmodule Strider.Agent do
 
   # Style 1: Tuple as first argument
   def new({backend_type, backend_config}, opts) when is_atom(backend_type) do
-    build_agent({backend_type, backend_config}, opts)
+    build_agent({backend_type, normalize_backend_config(backend_config)}, opts)
   end
 
-  def new({backend_type, backend_config, backend_opts}, opts)
-      when is_atom(backend_type) and is_list(backend_opts) do
-    build_agent({backend_type, backend_config, backend_opts}, opts)
+  def new({backend_type, model, backend_opts}, opts)
+      when is_atom(backend_type) and is_binary(model) and is_list(backend_opts) do
+    config = backend_opts |> Map.new() |> Map.put(:model, model)
+    build_agent({backend_type, config}, opts)
   end
 
   # Style 2: Pure keyword config
   def new(opts, []) when is_list(opts) do
     backend = Keyword.fetch!(opts, :backend)
     rest_opts = Keyword.delete(opts, :backend)
-    build_agent(backend, rest_opts)
+    new(backend, rest_opts)
   end
+
+  defp normalize_backend_config(config) when is_map(config), do: config
+  defp normalize_backend_config(config) when is_list(config), do: Map.new(config)
+  defp normalize_backend_config(model) when is_binary(model), do: %{model: model}
 
   defp build_agent(backend, opts) do
     {config_opts, agent_opts} = split_config_opts(opts)
@@ -166,10 +170,6 @@ defmodule Strider.Agent do
     resolve_backend_module(backend_type)
   end
 
-  def backend_module(%__MODULE__{backend: {backend_type, _, _}}) do
-    resolve_backend_module(backend_type)
-  end
-
   defp resolve_backend_module(:mock), do: Strider.Backends.Mock
 
   defp resolve_backend_module(module) when is_atom(module) do
@@ -188,16 +188,12 @@ defmodule Strider.Agent do
 
       iex> agent = Strider.Agent.new({:mock, response: "Hello"})
       iex> Strider.Agent.backend_config(agent)
-      [response: "Hello"]
+      %{response: "Hello"}
 
   """
-  @spec backend_config(t()) :: term()
+  @spec backend_config(t()) :: map()
   def backend_config(%__MODULE__{backend: {_, config}}) do
     config
-  end
-
-  def backend_config(%__MODULE__{backend: {_, config, opts}}) do
-    {config, opts}
   end
 
   @doc """

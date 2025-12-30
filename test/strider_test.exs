@@ -313,7 +313,7 @@ defmodule StriderTest do
     test "tuple as first argument" do
       agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet"})
 
-      assert agent.backend == {:req_llm, "anthropic:claude-4-5-sonnet"}
+      assert agent.backend == {:req_llm, %{model: "anthropic:claude-4-5-sonnet"}}
       assert agent.system_prompt == nil
     end
 
@@ -324,7 +324,7 @@ defmodule StriderTest do
           temperature: 0.7
         )
 
-      assert agent.backend == {:req_llm, "openai:gpt-4"}
+      assert agent.backend == {:req_llm, %{model: "openai:gpt-4"}}
       assert agent.system_prompt == "You are helpful."
       assert agent.config == %{temperature: 0.7}
     end
@@ -336,20 +336,21 @@ defmodule StriderTest do
           system_prompt: "You are helpful."
         )
 
-      assert agent.backend == {:req_llm, "openai:gpt-4"}
+      assert agent.backend == {:req_llm, %{model: "openai:gpt-4"}}
       assert agent.system_prompt == "You are helpful."
     end
 
     test "three-element tuple with backend options (BYOK)" do
       agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet", api_key: "sk-test"})
 
-      assert agent.backend == {:req_llm, "anthropic:claude-4-5-sonnet", [api_key: "sk-test"]}
+      assert agent.backend ==
+               {:req_llm, %{model: "anthropic:claude-4-5-sonnet", api_key: "sk-test"}}
     end
 
     test "mock backend with keyword config" do
       agent = Agent.new({:mock, response: "Hello!", delay: 100})
 
-      assert agent.backend == {:mock, [response: "Hello!", delay: 100]}
+      assert agent.backend == {:mock, %{response: "Hello!", delay: 100}}
     end
   end
 end
