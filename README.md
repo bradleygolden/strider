@@ -397,17 +397,15 @@ The sandbox image (`ghcr.io/bradleygolden/strider-sandbox`) provides:
 Sandbox.create({Docker, %{image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"}})
 ```
 
-**Building and pushing:**
+**Building and pushing (multi-arch for Mac + Fly.io):**
 
 ```bash
-# Build with commit ref
 REF=$(git rev-parse --short HEAD)
-docker build -t ghcr.io/bradleygolden/strider-sandbox:$REF \
-  -f priv/sandbox/Dockerfile priv/sandbox
 
-# Push to registry (requires write:packages scope)
-echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
-docker push ghcr.io/bradleygolden/strider-sandbox:$REF
+# Multi-arch build (amd64 for Fly, arm64 for Mac)
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/bradleygolden/strider-sandbox:$REF \
+  -f priv/sandbox/Dockerfile priv/sandbox --push
 ```
 
 ### Running Integration Tests
