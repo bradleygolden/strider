@@ -304,7 +304,7 @@ defmodule Strider.Sandbox.Pool do
     new_state = %{state | config: new_config}
 
     if Keyword.get(opts, :cleanup, false) do
-      spawn(fn -> cleanup_partition(state, partition) end)
+      Task.start(fn -> cleanup_partition(state, partition) end)
     end
 
     {:reply, :ok, new_state}
