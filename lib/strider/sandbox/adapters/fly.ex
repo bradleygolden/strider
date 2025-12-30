@@ -78,6 +78,16 @@ if Code.ensure_loaded?(Req) do
     alias Strider.Sandbox.HealthPoller
 
     @default_image "ghcr.io/bradleygolden/strider-sandbox"
+    @default_memory_mb 256
+    @default_cpus 1
+    @default_cpu_kind "shared"
+    @default_proxy_port 4000
+    @default_health_port 4001
+    @default_health_interval 2_000
+    @default_timeout_ms 60_000
+    @default_exec_timeout_ms 30_000
+    @fly_max_exec_timeout_ms 60_000
+    @fly_max_wait_timeout_sec 60
 
     @doc """
     Creates a new Fly Machine sandbox.
@@ -127,9 +137,9 @@ if Code.ensure_loaded?(Req) do
               image: Map.get(config, :image, @default_image),
               env: build_env(config),
               guest: %{
-                memory_mb: Map.get(config, :memory_mb, 256),
-                cpus: Map.get(config, :cpu, 1),
-                cpu_kind: Map.get(config, :cpu_kind, "shared")
+                memory_mb: Map.get(config, :memory_mb, @default_memory_mb),
+                cpus: Map.get(config, :cpu, @default_cpus),
+                cpu_kind: Map.get(config, :cpu_kind, @default_cpu_kind)
               },
               services: Map.get(config, :services) || build_services(Map.get(config, :ports, [])),
               auto_destroy: Map.get(config, :auto_destroy, true),
@@ -164,7 +174,9 @@ if Code.ensure_loaded?(Req) do
     def exec(sandbox_id, command, opts) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
-      timeout_ms = min(Keyword.get(opts, :timeout, 30_000), 60_000)
+
+      timeout_ms =
+        min(Keyword.get(opts, :timeout, @default_exec_timeout_ms), @fly_max_exec_timeout_ms)
 
       body = %{
         command: ["sh", "-c", command],
@@ -444,12 +456,11 @@ if Code.ensure_loaded?(Req) do
     """
     @impl true
     def await_ready(sandbox_id, metadata, opts \\ []) do
-      timeout_ms = Keyword.get(opts, :timeout, 60_000)
+      timeout_ms = Keyword.get(opts, :timeout, @default_timeout_ms)
       deadline = System.monotonic_time(:millisecond) + timeout_ms
-      # Fly wait API has a max timeout of 60 seconds
-      wait_timeout_sec = min(div(timeout_ms, 1000), 60)
-      port = Keyword.get(opts, :port, 4001)
-      interval = Keyword.get(opts, :interval, 2_000)
+      wait_timeout_sec = min(div(timeout_ms, 1000), @fly_max_wait_timeout_sec)
+      port = Keyword.get(opts, :port, @default_health_port)
+      interval = Keyword.get(opts, :interval, @default_health_interval)
 
       # Wait for machine to start, but proceed to health polling even on timeout (408)
       # since the machine may still become ready within our overall deadline
@@ -491,9 +502,9 @@ if Code.ensure_loaded?(Req) do
       base = %{
         image: Map.fetch!(config, :image),
         guest: %{
-          memory_mb: Map.get(config, :memory_mb, 256),
-          cpus: Map.get(config, :cpu, 1),
-          cpu_kind: Map.get(config, :cpu_kind, "shared")
+          memory_mb: Map.get(config, :memory_mb, @default_memory_mb),
+          cpus: Map.get(config, :cpu, @default_cpus),
+          cpu_kind: Map.get(config, :cpu_kind, @default_cpu_kind)
         }
       }
 
@@ -564,7 +575,7 @@ if Code.ensure_loaded?(Req) do
 
         proxy_opts when is_list(proxy_opts) ->
           ip = Keyword.fetch!(proxy_opts, :ip)
-          port = Keyword.get(proxy_opts, :port, 4000)
+          port = Keyword.get(proxy_opts, :port, @default_proxy_port)
 
           env
           |> Map.put("STRIDER_NETWORK_MODE", "proxy_only")
