@@ -210,8 +210,8 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp get_content_type(headers) do
-      case List.keyfind(headers, "content-type", 0) do
-        {_, value} -> value
+      case Map.get(headers, "content-type") do
+        [value | _] -> value
         nil -> "application/json"
       end
     end
