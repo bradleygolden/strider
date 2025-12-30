@@ -551,11 +551,11 @@ if Code.ensure_loaded?(Req) do
     defp get_api_token!(config_or_opts) do
       config_or_opts
       |> ensure_map()
-      |> Map.get(:api_token)
-      |> Kernel.||(System.get_env("FLY_API_TOKEN"))
-      |> Kernel.||(
-        raise ArgumentError, "api_token is required in config or FLY_API_TOKEN env var"
-      )
+      |> Map.get(:api_token, System.get_env("FLY_API_TOKEN"))
+      |> case do
+        nil -> raise ArgumentError, "api_token is required in config or FLY_API_TOKEN env var"
+        token -> token
+      end
     end
 
     defp ensure_map(map) when is_map(map), do: map
