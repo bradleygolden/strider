@@ -27,7 +27,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "ceba5cb"},
+    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "c2667e1"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy.Sandbox
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
@@ -370,18 +370,30 @@ Write your own by implementing `Strider.Backend`.
 
 ## Development
 
-### Building the Sandbox Image
+### Sandbox Image
 
-The sandbox image provides network isolation and polyglot runtime (Python, Node.js):
+The sandbox image (`ghcr.io/bradleygolden/strider-sandbox`) provides:
+- Network isolation via iptables (no outbound traffic by default)
+- Polyglot runtime (Python 3, Node.js)
+- Non-root execution (runs as `sandbox` user)
+
+**Using a specific version:**
+
+```elixir
+Sandbox.create({Docker, %{image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"}})
+```
+
+**Building and pushing:**
 
 ```bash
-# Build locally
-docker build -t ghcr.io/bradleygolden/strider-sandbox:latest \
+# Build with commit ref
+REF=$(git rev-parse --short HEAD)
+docker build -t ghcr.io/bradleygolden/strider-sandbox:$REF \
   -f priv/sandbox/Dockerfile priv/sandbox
 
-# Push to registry (requires authentication)
+# Push to registry (requires write:packages scope)
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
-docker push ghcr.io/bradleygolden/strider-sandbox:latest
+docker push ghcr.io/bradleygolden/strider-sandbox:$REF
 ```
 
 ### Running Integration Tests
