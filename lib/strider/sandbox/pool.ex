@@ -81,12 +81,8 @@ defmodule Strider.Sandbox.Pool do
   @spec start_link(config(), keyword()) :: GenServer.on_start()
   def start_link(config, opts \\ []) do
     {name, opts} = Keyword.pop(opts, :name)
-
-    if name do
-      GenServer.start_link(__MODULE__, config, Keyword.put(opts, :name, name))
-    else
-      GenServer.start_link(__MODULE__, config, opts)
-    end
+    opts = if name, do: Keyword.put(opts, :name, name), else: opts
+    GenServer.start_link(__MODULE__, config, opts)
   end
 
   @doc """
