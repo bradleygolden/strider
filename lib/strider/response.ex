@@ -149,7 +149,7 @@ defmodule Strider.Response do
   """
   @spec has_tool_calls?(t()) :: boolean()
   def has_tool_calls?(%__MODULE__{tool_calls: tool_calls}) do
-    tool_calls != [] and tool_calls != nil
+    tool_calls != []
   end
 
   @doc """
