@@ -35,9 +35,9 @@ defmodule Strider.Backend do
   2. Parse the response according to the schema
   3. Return structured data in `response.content`
 
-  Example with structured output (requires `:strider_schema` dep):
+  Example with structured output (requires `:zoi` dep):
 
-      alias StriderSchema.Zoi, as: Schema
+      alias Strider.Schema.Zoi, as: Schema
 
       output_schema = Schema.object(%{
         name: Schema.string(),

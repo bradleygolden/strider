@@ -110,7 +110,7 @@ defmodule Strider.Hooks do
       )
 
       # Agent-level hooks (used for all calls with this agent)
-      agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
+      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
         hooks: MyApp.LoggingHooks
       )
 
