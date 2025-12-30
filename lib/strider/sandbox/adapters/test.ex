@@ -65,14 +65,6 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @doc """
-  Resets all adapter state.
-  """
-  @spec reset() :: :ok
-  def reset do
-    Agent.update(__MODULE__, fn _ -> %{sandboxes: %{}, responses: %{}} end)
-  end
-
-  @doc """
   Gets the config for a sandbox.
   """
   @spec get_config(String.t()) :: map() | nil
