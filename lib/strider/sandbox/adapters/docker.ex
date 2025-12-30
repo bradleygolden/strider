@@ -114,6 +114,9 @@ defmodule Strider.Sandbox.Adapters.Docker do
           :error -> {:error, :invalid_base64}
         end
 
+      {:ok, %{exit_code: _, stdout: err}} when err != "" ->
+        {:error, err}
+
       {:ok, %{exit_code: _}} ->
         {:error, :file_not_found}
 
@@ -132,6 +135,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
     case exec(container_id, cmd, opts) do
       {:ok, %{exit_code: 0}} -> :ok
+      {:ok, %{exit_code: _, stdout: err}} when err != "" -> {:error, err}
       {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
       error -> error
     end
