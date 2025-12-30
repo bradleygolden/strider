@@ -27,7 +27,7 @@ Tool calling isn't built in. You decide how to parse responses and when to stop.
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "c2667e1"},
+    {:strider, github: "bradleygolden/strider"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy.Sandbox
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
@@ -284,7 +284,7 @@ alias Strider.Sandbox.Adapters.Docker
 
 # Pin to a specific image version (recommended for production)
 {:ok, sandbox} = Sandbox.create({Docker, %{
-  image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"
+  image: "ghcr.io/bradleygolden/strider-sandbox:latest"
 }})
 
 # Use a custom image (note: no network isolation unless image supports it)
@@ -394,7 +394,7 @@ The sandbox image (`ghcr.io/bradleygolden/strider-sandbox`) provides:
 **Using a specific version:**
 
 ```elixir
-Sandbox.create({Docker, %{image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"}})
+Sandbox.create({Docker, %{image: "ghcr.io/bradleygolden/strider-sandbox:latest"}})
 ```
 
 **Building and pushing (multi-arch for Mac + Fly.io):**
@@ -428,7 +428,7 @@ mix test --include docker   # Runs docker integration tests
 Install the JS package via GitHub:
 
 ```json
-"strider-sandbox": "github:bradleygolden/strider-sandbox#e841831"
+"strider-sandbox": "github:bradleygolden/strider-sandbox"
 ```
 
 **Status:**
