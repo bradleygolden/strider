@@ -59,20 +59,16 @@ defmodule Strider.Sandbox do
   def create({adapter_module, config}) when is_atom(adapter_module) do
     config_map = normalize_config(config)
 
-    case adapter_module.create(config_map) do
-      {:ok, sandbox_id, metadata} ->
-        sandbox =
-          Instance.new(%{
-            id: sandbox_id,
-            adapter: adapter_module,
-            config: config_map,
-            metadata: metadata
-          })
+    with {:ok, sandbox_id, metadata} <- adapter_module.create(config_map) do
+      sandbox =
+        Instance.new(%{
+          id: sandbox_id,
+          adapter: adapter_module,
+          config: config_map,
+          metadata: metadata
+        })
 
-        {:ok, sandbox}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, sandbox}
     end
   end
 
