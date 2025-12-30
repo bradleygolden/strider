@@ -116,6 +116,11 @@ defmodule Strider.Sandbox.Adapters.Docker do
     FileOps.write_file(&exec(container_id, &1, &2), path, content, opts)
   end
 
+  @impl true
+  def write_files(container_id, files, opts) do
+    FileOps.write_files(&exec(container_id, &1, &2), files, opts)
+  end
+
   # Private helpers
 
   defp generate_name do

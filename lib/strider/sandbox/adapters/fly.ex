@@ -283,6 +283,11 @@ if Code.ensure_loaded?(Req) do
       FileOps.write_file(&exec(sandbox_id, &1, &2), path, content, opts)
     end
 
+    @impl true
+    def write_files(sandbox_id, files, opts) do
+      FileOps.write_files(&exec(sandbox_id, &1, &2), files, opts)
+    end
+
     @doc """
     Stops a Fly Machine without destroying it.
 
@@ -550,13 +555,17 @@ if Code.ensure_loaded?(Req) do
     end
 
     defp get_api_token!(config_or_opts) do
-      config_or_opts =
-        if is_list(config_or_opts), do: Map.new(config_or_opts), else: config_or_opts
-
-      Map.get(config_or_opts, :api_token) ||
-        System.get_env("FLY_API_TOKEN") ||
+      config_or_opts
+      |> ensure_map()
+      |> Map.get(:api_token)
+      |> Kernel.||(System.get_env("FLY_API_TOKEN"))
+      |> Kernel.||(
         raise ArgumentError, "api_token is required in config or FLY_API_TOKEN env var"
+      )
     end
+
+    defp ensure_map(map) when is_map(map), do: map
+    defp ensure_map(keyword) when is_list(keyword), do: Map.new(keyword)
 
     defp build_env(config) do
       base_env =

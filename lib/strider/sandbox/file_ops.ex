@@ -63,6 +63,26 @@ defmodule Strider.Sandbox.FileOps do
   end
 
   @doc """
+  Writes multiple files to a sandbox.
+
+  Writes files sequentially, stopping on first error.
+  """
+  @spec write_files(
+          (String.t(), keyword() -> {:ok, ExecResult.t()} | {:error, term()}),
+          [{String.t(), binary()}],
+          keyword()
+        ) ::
+          :ok | {:error, term()}
+  def write_files(exec_fn, files, opts) do
+    Enum.reduce_while(files, :ok, fn {path, content}, :ok ->
+      case write_file(exec_fn, path, content, opts) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  @doc """
   Escapes a file path for safe shell usage.
   """
   @spec escape_path(String.t()) :: String.t()
