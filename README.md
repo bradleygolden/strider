@@ -15,8 +15,8 @@ Agents are loops. A loop that calls an LLM, gets a response, and decides what to
 - Telemetry integration for observability
 - Prompt templates with Liquid syntax
 - Schema validation for structured outputs
-- Sandbox execution (Docker, Fly.io)
-- HTTP proxy for forwarding LLM API requests
+- Sandbox execution with security-by-default (Docker, Fly.io)
+- HTTP proxy for controlled network access with credential injection
 
 ## What Strider Doesn't Do
 
@@ -266,17 +266,28 @@ schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
 
 ## Sandbox Execution
 
+Sandboxes provide isolated code execution with **no network access by default** (maximum security).
+
 ```elixir
 alias Strider.Sandbox
 alias Strider.Sandbox.Adapters.Docker
 
-{:ok, sandbox} = Sandbox.create({Docker, image: "node:22-slim"})
-{:ok, result} = Sandbox.exec(sandbox, "node --version")
+# Simple isolated execution - no network, uses default strider sandbox image
+{:ok, sandbox} = Sandbox.create(Docker)
+{:ok, result} = Sandbox.exec(sandbox, "python3 -c 'print(1+1)'")
 
+# File operations
 :ok = Sandbox.write_file(sandbox, "/app/main.js", "console.log('hello')")
 {:ok, content} = Sandbox.read_file(sandbox, "/app/main.js")
 
 Sandbox.terminate(sandbox)
+```
+
+Enable controlled network access through a proxy (see [Sandbox Proxy](#sandbox-proxy) for setup):
+
+```elixir
+# Create sandbox with proxy access
+{:ok, sandbox} = Sandbox.create(Docker, proxy: [ip: "172.17.0.1", port: 4000])
 ```
 
 Fly.io adapter for production:
@@ -286,7 +297,6 @@ alias Strider.Sandbox
 alias Strider.Sandbox.Adapters.Fly
 
 {:ok, sandbox} = Sandbox.create({Fly, %{
-  image: "node:22-slim",
   app_name: "my-sandboxes",
   region: "ord",
   mounts: [%{name: "data", path: "/data", size_gb: 10}]
@@ -307,7 +317,7 @@ alias Strider.Sandbox.Pool
   adapter: Fly,
   partitions: ["ord", "ewr"],
   target_per_partition: 2,
-  build_config: fn partition -> %{image: "node:22-slim", app_name: "my-sandboxes", region: partition} end
+  build_config: fn partition -> %{app_name: "my-sandboxes", region: partition} end
 })
 
 case Pool.checkout(pool, "ord") do
@@ -357,6 +367,31 @@ Sandboxes send requests with the target URL in the path: `POST http://proxy:4000
 - `Strider.Backends.Mock` - For testing
 
 Write your own by implementing `Strider.Backend`.
+
+## Development
+
+### Building the Sandbox Image
+
+The sandbox image provides network isolation and polyglot runtime (Python, Node.js):
+
+```bash
+# Build locally
+docker build -t ghcr.io/bradleygolden/strider-sandbox:latest \
+  -f priv/sandbox/Dockerfile priv/sandbox
+
+# Push to registry (requires authentication)
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+docker push ghcr.io/bradleygolden/strider-sandbox:latest
+```
+
+### Running Integration Tests
+
+Docker integration tests are excluded by default:
+
+```bash
+mix test                    # Excludes docker tests
+mix test --include docker   # Runs docker integration tests
+```
 
 ## Ecosystem
 

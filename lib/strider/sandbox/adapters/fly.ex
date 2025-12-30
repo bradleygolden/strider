@@ -10,7 +10,7 @@ if Code.ensure_loaded?(Req) do
     ## Configuration
 
     Generic fields (work across adapters):
-    - `:image` - Container image (required, e.g., "node:22-slim")
+    - `:image` - Container image (default: strider sandbox image)
     - `:env` - Environment variables as `[{name, value}]`
     - `:ports` - Ports to expose as list of integers
     - `:memory_mb` - Memory limit in MB (default: 256)
@@ -18,6 +18,8 @@ if Code.ensure_loaded?(Req) do
     - `:cpu_kind` - CPU type, "shared" or "performance" (default: "shared")
     - `:auto_destroy` - Auto-destroy machine on exit (default: true). Set to false for
       persistent machines that should survive restarts.
+    - `:proxy` - Enable proxy mode for controlled network access:
+      - `[ip: "fdaa:...", port: 4000]` - Proxy IP and port (port defaults to 4000)
 
     Fly-specific fields:
     - `:app_name` - Fly app name (required)
@@ -33,11 +35,10 @@ if Code.ensure_loaded?(Req) do
     - `:network` - Custom 6PN network name for isolation. Apps on different networks
       cannot communicate with each other.
 
-    External proxy isolation (recommended for credential security):
-    - `:proxy_ip` - IP address of external proxy for sandboxed network access.
-      When set, `STRIDER_PROXY_IP` env var is passed to the container.
-    - `:proxy_port` - Port of external proxy (default: 4000).
-      When proxy_ip is set, `STRIDER_PROXY_PORT` env var is passed to the container.
+    ## Network Isolation
+
+    By default, sandboxes have **no network access** (maximum isolation). To enable
+    controlled network access through a proxy, pass the `:proxy` option.
 
     ## Usage
 
@@ -73,6 +74,8 @@ if Code.ensure_loaded?(Req) do
     alias Strider.Sandbox.Adapters.Fly.Client
     alias Strider.Sandbox.ExecResult
     alias Strider.Sandbox.HealthPoller
+
+    @default_image "ghcr.io/bradleygolden/strider-sandbox"
 
     @doc """
     Creates a new Fly Machine sandbox.
@@ -119,7 +122,7 @@ if Code.ensure_loaded?(Req) do
           %{
             skip_launch: Map.get(config, :skip_launch, false),
             config: %{
-              image: Map.fetch!(config, :image),
+              image: Map.get(config, :image, @default_image),
               env: build_env(config),
               guest: %{
                 memory_mb: Map.get(config, :memory_mb, 256),
@@ -616,22 +619,23 @@ if Code.ensure_loaded?(Req) do
         |> Map.get(:env, [])
         |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
 
-      # Add proxy configuration if specified
       base_env
-      |> maybe_add_proxy_env(config)
+      |> add_network_env(config)
     end
 
-    defp maybe_add_proxy_env(env, config) do
-      case Map.get(config, :proxy_ip) do
+    defp add_network_env(env, config) do
+      case Map.get(config, :proxy) do
         nil ->
-          env
+          Map.put(env, "STRIDER_NETWORK_MODE", "none")
 
-        proxy_ip ->
-          proxy_port = Map.get(config, :proxy_port, 4000)
+        proxy_opts when is_list(proxy_opts) ->
+          ip = Keyword.fetch!(proxy_opts, :ip)
+          port = Keyword.get(proxy_opts, :port, 4000)
 
           env
-          |> Map.put("STRIDER_PROXY_IP", to_string(proxy_ip))
-          |> Map.put("STRIDER_PROXY_PORT", to_string(proxy_port))
+          |> Map.put("STRIDER_NETWORK_MODE", "proxy_only")
+          |> Map.put("STRIDER_PROXY_IP", to_string(ip))
+          |> Map.put("STRIDER_PROXY_PORT", to_string(port))
       end
     end
 

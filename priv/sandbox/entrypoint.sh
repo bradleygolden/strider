@@ -7,15 +7,14 @@
 # 3. Drops privileges to sandbox user
 # 4. Executes the provided command
 #
-# Required environment variables:
-#   STRIDER_PROXY_IP - IP address of the external proxy
-#   STRIDER_PROXY_PORT - Port of the external proxy (default: 4000)
-#
 # Optional environment variables:
 #   STRIDER_NETWORK_MODE - Network isolation mode:
-#     "proxy_only" (default) - All traffic must go through proxy
-#     "hybrid" - Proxy + direct external, block internal networks
+#     "none" (default) - All outbound traffic blocked (maximum isolation)
+#     "proxy_only" - All traffic must go through proxy (requires STRIDER_PROXY_IP)
+#     "hybrid" - Proxy + direct external, block internal networks (requires STRIDER_PROXY_IP)
 #     "open" - No network restrictions (for testing only)
+#   STRIDER_PROXY_IP - IP address of the external proxy (required for proxy_only/hybrid modes)
+#   STRIDER_PROXY_PORT - Port of the external proxy (default: 4000)
 #   STRIDER_SKIP_IPTABLES - Set to "true" to skip iptables setup (for testing)
 #   STRIDER_RUN_AS_ROOT - Set to "true" to run command as root (not recommended)
 
@@ -23,13 +22,15 @@ set -e
 
 # Defaults
 STRIDER_PROXY_PORT="${STRIDER_PROXY_PORT:-4000}"
-STRIDER_NETWORK_MODE="${STRIDER_NETWORK_MODE:-proxy_only}"
+STRIDER_NETWORK_MODE="${STRIDER_NETWORK_MODE:-none}"
 
-# Validate required environment
-if [ -z "$STRIDER_PROXY_IP" ]; then
-    echo "ERROR: STRIDER_PROXY_IP environment variable is required"
-    echo "This should be the private IP of the proxy service"
-    exit 1
+# Validate required environment (proxy IP only needed for proxy_only/hybrid modes)
+if [ "$STRIDER_NETWORK_MODE" = "proxy_only" ] || [ "$STRIDER_NETWORK_MODE" = "hybrid" ]; then
+    if [ -z "$STRIDER_PROXY_IP" ]; then
+        echo "ERROR: STRIDER_PROXY_IP environment variable is required for $STRIDER_NETWORK_MODE mode"
+        echo "This should be the private IP of the proxy service"
+        exit 1
+    fi
 fi
 
 # Setup iptables rules to restrict network access
@@ -54,6 +55,13 @@ setup_network_isolation() {
     ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
     case "$STRIDER_NETWORK_MODE" in
+        "none")
+            echo "[sandbox] No network mode - all outbound traffic blocked"
+            # Only loopback allowed (already added above), drop everything else
+            iptables -A OUTPUT -j DROP
+            ip6tables -A OUTPUT -j DROP
+            ;;
+
         "open")
             echo "[sandbox] Open mode - no network restrictions"
             iptables -A OUTPUT -j ACCEPT
@@ -136,24 +144,32 @@ setup_network_isolation() {
     echo "[sandbox] Network isolation configured"
 }
 
-# Set proxy environment variables (only in proxy_only mode)
+# Set proxy environment variables
 setup_proxy_env() {
-    if [ "$STRIDER_NETWORK_MODE" = "proxy_only" ]; then
-        export HTTP_PROXY="http://$STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
-        export HTTPS_PROXY="http://$STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
-        export http_proxy="$HTTP_PROXY"
-        export https_proxy="$HTTPS_PROXY"
+    case "$STRIDER_NETWORK_MODE" in
+        "none")
+            echo "[sandbox] No network - proxy not configured"
+            ;;
+        "proxy_only")
+            export HTTP_PROXY="http://$STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
+            export HTTPS_PROXY="http://$STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
+            export http_proxy="$HTTP_PROXY"
+            export https_proxy="$HTTPS_PROXY"
 
-        # Also set for npm/node
-        export npm_config_proxy="$HTTP_PROXY"
-        export npm_config_https_proxy="$HTTPS_PROXY"
+            # Also set for npm/node
+            export npm_config_proxy="$HTTP_PROXY"
+            export npm_config_https_proxy="$HTTPS_PROXY"
 
-        echo "[sandbox] Proxy configured: $HTTP_PROXY"
-    else
-        # Export proxy URL for sandbox client to use selectively
-        export STRIDER_PROXY_URL="http://$STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
-        echo "[sandbox] Proxy available at: $STRIDER_PROXY_URL (not forced)"
-    fi
+            echo "[sandbox] Proxy configured: $HTTP_PROXY"
+            ;;
+        *)
+            # Export proxy URL for sandbox client to use selectively (hybrid/open)
+            if [ -n "$STRIDER_PROXY_IP" ]; then
+                export STRIDER_PROXY_URL="http://$STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
+                echo "[sandbox] Proxy available at: $STRIDER_PROXY_URL (not forced)"
+            fi
+            ;;
+    esac
 }
 
 # Run the command
@@ -175,8 +191,10 @@ run_command() {
 
 # Main
 echo "[sandbox] Strider Sandbox Container"
-echo "[sandbox] Proxy IP: $STRIDER_PROXY_IP"
-echo "[sandbox] Proxy Port: $STRIDER_PROXY_PORT"
+echo "[sandbox] Network Mode: $STRIDER_NETWORK_MODE"
+if [ -n "$STRIDER_PROXY_IP" ]; then
+    echo "[sandbox] Proxy: $STRIDER_PROXY_IP:$STRIDER_PROXY_PORT"
+fi
 
 # Setup network isolation (requires NET_ADMIN capability)
 setup_network_isolation || {

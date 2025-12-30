@@ -6,7 +6,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   ## Configuration
 
-  - `:image` - Docker image to use (default: "ubuntu:22.04")
+  - `:image` - Docker image to use (default: strider sandbox image)
   - `:workdir` - Working directory in container (default: "/workspace")
   - `:command` - Container command:
     - `nil` (default) - Runs `tail -f /dev/null` to keep container alive
@@ -18,11 +18,20 @@ defmodule Strider.Sandbox.Adapters.Docker do
   - `:mounts` - List of volume mounts: `[{src, dest}]` or `[{src, dest, readonly: true}]`
   - `:ports` - List of port mappings: `[{host_port, container_port}]`
   - `:env` - List of environment variables: `[{name, value}]`
+  - `:proxy` - Enable proxy mode for controlled network access:
+    - `[ip: "172.17.0.1", port: 4000]` - Proxy IP and port (port defaults to 4000)
+
+  ## Network Isolation
+
+  By default, sandboxes have **no network access** (maximum isolation). To enable
+  controlled network access through a proxy, pass the `:proxy` option.
 
   ## Security
 
   By default, containers are created with:
   - `--cap-drop ALL` - Drop all capabilities
+  - `--cap-add NET_ADMIN` - Required for network isolation via iptables
+  - `--cap-add SETUID/SETGID` - Required for privilege dropping in entrypoint
   - `--security-opt no-new-privileges` - Prevent privilege escalation
   """
 
@@ -30,7 +39,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   alias Strider.Sandbox.ExecResult
 
-  @default_image "ubuntu:22.04"
+  @default_image "ghcr.io/bradleygolden/strider-sandbox"
   @default_workdir "/workspace"
   @default_timeout 30_000
 
@@ -57,8 +66,9 @@ defmodule Strider.Sandbox.Adapters.Docker do
   def exec(container_id, command, opts) do
     timeout = Keyword.get(opts, :timeout, @default_timeout)
     workdir = Keyword.get(opts, :workdir)
+    user = Keyword.get(opts, :user, "sandbox")
 
-    args = ["exec"]
+    args = ["exec", "-u", user]
     args = if workdir, do: args ++ ["-w", workdir], else: args
     args = args ++ [container_id, "sh", "-c", command]
 
@@ -140,6 +150,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
     |> add_mounts(config)
     |> add_ports(config)
     |> add_env_vars(config)
+    |> add_network_env(config)
     |> add_image_and_command(config, image)
   end
 
@@ -151,7 +162,19 @@ defmodule Strider.Sandbox.Adapters.Docker do
   end
 
   defp add_security_opts(args) do
-    args ++ ["--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
+    args ++
+      [
+        "--cap-drop",
+        "ALL",
+        "--cap-add",
+        "NET_ADMIN",
+        "--cap-add",
+        "SETUID",
+        "--cap-add",
+        "SETGID",
+        "--security-opt",
+        "no-new-privileges"
+      ]
   end
 
   defp add_mounts(args, config) do
@@ -171,6 +194,27 @@ defmodule Strider.Sandbox.Adapters.Docker do
     Enum.reduce(Map.get(config, :env, []), args, fn {k, v}, acc ->
       acc ++ ["-e", "#{k}=#{v}"]
     end)
+  end
+
+  defp add_network_env(args, config) do
+    case Map.get(config, :proxy) do
+      nil ->
+        args ++ ["-e", "STRIDER_NETWORK_MODE=none"]
+
+      proxy_opts when is_list(proxy_opts) ->
+        ip = Keyword.fetch!(proxy_opts, :ip)
+        port = Keyword.get(proxy_opts, :port, 4000)
+
+        args ++
+          [
+            "-e",
+            "STRIDER_NETWORK_MODE=proxy_only",
+            "-e",
+            "STRIDER_PROXY_IP=#{ip}",
+            "-e",
+            "STRIDER_PROXY_PORT=#{port}"
+          ]
+    end
   end
 
   defp add_image_and_command(args, config, image) do
