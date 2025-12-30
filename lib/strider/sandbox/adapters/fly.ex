@@ -500,7 +500,7 @@ if Code.ensure_loaded?(Req) do
     # Private helpers
 
     defp build_machine_config(config) do
-      base = %{
+      %{
         image: Map.fetch!(config, :image),
         guest: %{
           memory_mb: Map.get(config, :memory_mb, @default_memory_mb),
@@ -508,8 +508,6 @@ if Code.ensure_loaded?(Req) do
           cpu_kind: Map.get(config, :cpu_kind, @default_cpu_kind)
         }
       }
-
-      base
       |> maybe_add_env(config)
       |> maybe_add_services(config)
     end
@@ -564,12 +562,9 @@ if Code.ensure_loaded?(Req) do
     defp ensure_map(keyword) when is_list(keyword), do: Map.new(keyword)
 
     defp build_env(config) do
-      base_env =
-        config
-        |> Map.get(:env, [])
-        |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
-
-      base_env
+      config
+      |> Map.get(:env, [])
+      |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
       |> add_network_env(config)
     end
 
