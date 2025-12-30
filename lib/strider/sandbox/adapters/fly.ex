@@ -73,6 +73,7 @@ if Code.ensure_loaded?(Req) do
 
     alias Strider.Sandbox.Adapters.Fly.Client
     alias Strider.Sandbox.ExecResult
+    alias Strider.Sandbox.FileOps
     alias Strider.Sandbox.HealthPoller
 
     @default_image "ghcr.io/bradleygolden/strider-sandbox"
@@ -259,48 +260,14 @@ if Code.ensure_loaded?(Req) do
       {:ok, "http://#{machine_id}.vm.#{app_name}.internal:#{port}"}
     end
 
-    # Additional Fly-specific functions (not part of Adapter behaviour)
-
-    @doc """
-    Reads a file from the Fly Machine using base64 encoding.
-    """
     @impl true
     def read_file(sandbox_id, path, opts) do
-      case exec(sandbox_id, "base64 -w0 '#{escape_path(path)}'", opts) do
-        {:ok, %{exit_code: 0, stdout: encoded}} ->
-          case Base.decode64(String.trim(encoded)) do
-            {:ok, content} -> {:ok, content}
-            :error -> {:error, :invalid_base64}
-          end
-
-        {:ok, %{exit_code: _, stderr: err}} ->
-          {:error, err}
-
-        {:ok, %{exit_code: _}} ->
-          {:error, :file_not_found}
-
-        error ->
-          error
-      end
+      FileOps.read_file(&exec(sandbox_id, &1, &2), path, opts)
     end
 
-    @doc """
-    Writes a file to the Fly Machine using base64 encoding.
-    """
     @impl true
     def write_file(sandbox_id, path, content, opts) do
-      encoded = Base.encode64(content)
-      escaped_path = escape_path(path)
-
-      cmd =
-        "mkdir -p \"$(dirname '#{escaped_path}')\" && echo '#{encoded}' | base64 -d > '#{escaped_path}'"
-
-      case exec(sandbox_id, cmd, opts) do
-        {:ok, %{exit_code: 0}} -> :ok
-        {:ok, %{exit_code: _, stderr: err}} when err != "" -> {:error, err}
-        {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
-        error -> error
-      end
+      FileOps.write_file(&exec(sandbox_id, &1, &2), path, content, opts)
     end
 
     @doc """
@@ -732,10 +699,6 @@ if Code.ensure_loaded?(Req) do
 
     defp maybe_add_mounts(body, mounts) when is_list(mounts) do
       put_in(body, [:config, :mounts], mounts)
-    end
-
-    defp escape_path(path) do
-      String.replace(path, "'", "'\\''")
     end
 
     defp maybe_create_app(%{create_app: true} = config, app_name, api_token) do

@@ -38,6 +38,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
   @behaviour Strider.Sandbox.Adapter
 
   alias Strider.Sandbox.ExecResult
+  alias Strider.Sandbox.FileOps
 
   @default_image "ghcr.io/bradleygolden/strider-sandbox"
   @default_workdir "/workspace"
@@ -107,38 +108,12 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   @impl true
   def read_file(container_id, path, opts) do
-    case exec(container_id, "base64 -w0 '#{escape_path(path)}'", opts) do
-      {:ok, %{exit_code: 0, stdout: encoded}} ->
-        case Base.decode64(String.trim(encoded)) do
-          {:ok, content} -> {:ok, content}
-          :error -> {:error, :invalid_base64}
-        end
-
-      {:ok, %{exit_code: _, stdout: err}} when err != "" ->
-        {:error, err}
-
-      {:ok, %{exit_code: _}} ->
-        {:error, :file_not_found}
-
-      error ->
-        error
-    end
+    FileOps.read_file(&exec(container_id, &1, &2), path, opts)
   end
 
   @impl true
   def write_file(container_id, path, content, opts) do
-    encoded = Base.encode64(content)
-    escaped_path = escape_path(path)
-
-    cmd =
-      "mkdir -p \"$(dirname '#{escaped_path}')\" && echo '#{encoded}' | base64 -d > '#{escaped_path}'"
-
-    case exec(container_id, cmd, opts) do
-      {:ok, %{exit_code: 0}} -> :ok
-      {:ok, %{exit_code: _, stdout: err}} when err != "" -> {:error, err}
-      {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
-      error -> error
-    end
+    FileOps.write_file(&exec(container_id, &1, &2), path, content, opts)
   end
 
   # Private helpers
@@ -231,8 +206,4 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   defp maybe_add(args, _flag, nil, _transform), do: args
   defp maybe_add(args, flag, value, transform), do: args ++ [flag, transform.(value)]
-
-  defp escape_path(path) do
-    String.replace(path, "'", "'\\''")
-  end
 end
