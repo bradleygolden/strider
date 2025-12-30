@@ -149,6 +149,19 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
+  def write_files(sandbox_id, files, _opts) do
+    Agent.update(__MODULE__, fn state ->
+      update_in(state, [:sandboxes, sandbox_id, :files], &merge_files(&1, files))
+    end)
+  end
+
+  defp merge_files(existing, files) do
+    Enum.reduce(files, existing || %{}, fn {path, content}, acc ->
+      Map.put(acc, path, content)
+    end)
+  end
+
+  @impl true
   def await_ready(sandbox_id, _metadata, _opts) do
     {:ok,
      %{
