@@ -52,6 +52,9 @@ defmodule Strider.Hooks do
 
   ## Example - Caching (transforming with halt)
 
+  Response caching requires correlating the request messages with the response.
+  Use an ETS table or cache server that can look up by message hash:
+
       defmodule MyApp.CachingHooks do
         @behaviour Strider.Hooks
 
@@ -59,18 +62,22 @@ defmodule Strider.Hooks do
         def on_backend_request(_config, messages) do
           cache_key = :erlang.phash2(messages)
           case MyApp.Cache.get(cache_key) do
-            {:ok, cached} -> {:halt, cached}  # Skip LLM
-            :miss ->
-              Process.put(:cache_key, cache_key)
-              {:cont, messages}
+            {:ok, cached} -> {:halt, cached}  # Skip LLM, return cached response
+            :miss -> {:cont, messages}
           end
         end
+      end
+
+  For write-through caching, use `on_call_end` which has access to the context
+  containing the original messages:
+
+      defmodule MyApp.WriteThroughCache do
+        @behaviour Strider.Hooks
 
         @impl true
-        def on_backend_response(_config, response) do
-          if key = Process.get(:cache_key) do
-            MyApp.Cache.put(key, response)
-          end
+        def on_call_end(_agent, response, context) do
+          cache_key = :erlang.phash2(context.messages)
+          MyApp.Cache.put(cache_key, response)
           {:cont, response}
         end
       end
