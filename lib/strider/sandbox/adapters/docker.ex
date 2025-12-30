@@ -42,7 +42,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   @default_image "ghcr.io/bradleygolden/strider-sandbox"
   @default_workdir "/workspace"
-  @default_timeout 30_000
+  @default_exec_timeout_ms 30_000
 
   @impl true
   def create(config) do
@@ -65,7 +65,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   @impl true
   def exec(container_id, command, opts) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    timeout = Keyword.get(opts, :timeout, @default_exec_timeout_ms)
     workdir = Keyword.get(opts, :workdir)
     user = Keyword.get(opts, :user, "sandbox")
 
