@@ -173,40 +173,29 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def stop(sandbox_id, _opts \\ []) do
-    Agent.update(__MODULE__, fn state ->
-      if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id, :status], :stopped)
-      else
-        state
-      end
-    end)
-
+    update_sandbox(sandbox_id, [:status], :stopped)
     {:ok, %{}}
   end
 
   @impl true
   def start(sandbox_id, _opts \\ []) do
-    Agent.update(__MODULE__, fn state ->
-      if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id, :status], :running)
-      else
-        state
-      end
-    end)
-
+    update_sandbox(sandbox_id, [:status], :running)
     {:ok, %{}}
   end
 
   @impl true
   def update(sandbox_id, config, _opts \\ []) do
+    update_sandbox(sandbox_id, [:config], config)
+    {:ok, %{}}
+  end
+
+  defp update_sandbox(sandbox_id, path, value) do
     Agent.update(__MODULE__, fn state ->
       if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id, :config], config)
+        put_in(state, [:sandboxes, sandbox_id | path], value)
       else
         state
       end
     end)
-
-    {:ok, %{}}
   end
 end
