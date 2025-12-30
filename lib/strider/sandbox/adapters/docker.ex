@@ -13,7 +13,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
     - `:default` - Uses image's default ENTRYPOINT/CMD
     - `["cmd", "arg1", ...]` - Custom command list
   - `:memory_mb` - Memory limit in MB
-  - `:cpu_cores` - CPU limit
+  - `:cpu` - CPU limit
   - `:pids_limit` - Max number of processes
   - `:mounts` - List of volume mounts: `[{src, dest}]` or `[{src, dest, readonly: true}]`
   - `:ports` - List of port mappings: `[{host_port, container_port}]`
@@ -136,7 +136,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
   defp add_resource_limits(args, config) do
     args
     |> maybe_add("--memory", Map.get(config, :memory_mb), &"#{&1}m")
-    |> maybe_add("--cpus", Map.get(config, :cpu_cores), &to_string/1)
+    |> maybe_add("--cpus", Map.get(config, :cpu), &to_string/1)
     |> maybe_add("--pids-limit", Map.get(config, :pids_limit), &to_string/1)
   end
 
