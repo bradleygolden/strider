@@ -473,27 +473,18 @@ if Code.ensure_loaded?(Req) do
       port = Keyword.get(opts, :port, @default_health_port)
       interval = Keyword.get(opts, :interval, @default_health_interval)
 
-      # Wait for machine to start, but proceed to health polling even on timeout (408)
-      # since the machine may still become ready within our overall deadline
-      case wait(sandbox_id, "started", Keyword.put(opts, :timeout, wait_timeout_sec)) do
-        {:ok, _} ->
-          :ok
-
-        {:error, {:api_error, 408, _}} ->
-          # Wait timed out but machine may still start - continue to health polling
-          :ok
-
-        {:error, reason} ->
-          {:error, reason}
+      with :ok <- wait_for_started(sandbox_id, opts, wait_timeout_sec) do
+        remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
+        health_url = build_health_url(sandbox_id, metadata, port)
+        HealthPoller.poll(health_url, timeout: remaining_ms, interval: interval)
       end
-      |> case do
-        :ok ->
-          remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
-          health_url = build_health_url(sandbox_id, metadata, port)
-          HealthPoller.poll(health_url, timeout: remaining_ms, interval: interval)
+    end
 
-        error ->
-          error
+    defp wait_for_started(sandbox_id, opts, timeout_sec) do
+      case wait(sandbox_id, "started", Keyword.put(opts, :timeout, timeout_sec)) do
+        {:ok, _} -> :ok
+        {:error, {:api_error, 408, _}} -> :ok
+        {:error, reason} -> {:error, reason}
       end
     end
 
