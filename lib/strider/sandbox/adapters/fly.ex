@@ -72,6 +72,7 @@ if Code.ensure_loaded?(Req) do
     @behaviour Strider.Sandbox.Adapter
 
     alias Strider.Sandbox.Adapters.Fly.Client
+    alias Strider.Sandbox.Adapters.Fly.VolumeManager
     alias Strider.Sandbox.ExecResult
     alias Strider.Sandbox.FileOps
     alias Strider.Sandbox.HealthPoller
@@ -116,9 +117,9 @@ if Code.ensure_loaded?(Req) do
       region = Map.get(config, :region)
 
       with :ok <- maybe_create_app(config, app_name, api_token),
-           {:ok, validated_mounts} <- validate_mounts(Map.get(config, :mounts)),
+           {:ok, validated_mounts} <- VolumeManager.validate(Map.get(config, :mounts)),
            {:ok, resolved_mounts, created_volume_ids} <-
-             resolve_mounts(validated_mounts, app_name, region, api_token) do
+             VolumeManager.resolve(validated_mounts, app_name, region, api_token) do
         body =
           %{
             skip_launch: Map.get(config, :skip_launch, false),
@@ -148,7 +149,7 @@ if Code.ensure_loaded?(Req) do
             {:ok, "#{app_name}:#{machine_id}", metadata}
 
           {:error, reason} ->
-            cleanup_volumes(created_volume_ids, app_name, api_token)
+            VolumeManager.cleanup(created_volume_ids, app_name, api_token)
             {:error, reason}
         end
       end
@@ -392,22 +393,7 @@ if Code.ensure_loaded?(Req) do
     def get_machine_volumes(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
-
-      case Client.get_machine(app_name, machine_id, api_token) do
-        {:ok, %{"config" => %{"mounts" => mounts}}} when is_list(mounts) ->
-          volumes =
-            Enum.map(mounts, fn mount ->
-              %{volume: mount["volume"], path: mount["path"]}
-            end)
-
-          {:ok, volumes}
-
-        {:ok, _} ->
-          {:ok, []}
-
-        {:error, _} = error ->
-          error
-      end
+      VolumeManager.get_machine_volumes(app_name, machine_id, api_token)
     end
 
     @doc """
@@ -438,26 +424,7 @@ if Code.ensure_loaded?(Req) do
     """
     def list_volumes(app_name, opts \\ []) do
       api_token = get_api_token!(opts)
-
-      case Client.list_volumes(app_name, api_token) do
-        {:ok, volumes} ->
-          {:ok, Enum.map(volumes, &transform_volume/1)}
-
-        {:error, _} = error ->
-          error
-      end
-    end
-
-    defp transform_volume(vol) do
-      %{
-        id: vol["id"],
-        name: vol["name"],
-        state: vol["state"],
-        attached_machine_id: vol["attached_machine_id"],
-        region: vol["region"],
-        size_gb: vol["size_gb"],
-        created_at: vol["created_at"]
-      }
+      VolumeManager.list(app_name, api_token)
     end
 
     @doc """
@@ -623,76 +590,6 @@ if Code.ensure_loaded?(Req) do
         nil -> body
         region -> Map.put(body, :region, region)
       end
-    end
-
-    defp validate_mounts(nil), do: {:ok, []}
-    defp validate_mounts([]), do: {:ok, []}
-
-    defp validate_mounts(mounts) when is_list(mounts) do
-      Enum.reduce_while(mounts, {:ok, []}, fn mount, {:ok, acc} ->
-        case validate_mount(mount) do
-          {:ok, validated} -> {:cont, {:ok, [validated | acc]}}
-          {:error, _} = err -> {:halt, err}
-        end
-      end)
-      |> case do
-        {:ok, validated} -> {:ok, Enum.reverse(validated)}
-        error -> error
-      end
-    end
-
-    defp validate_mount(%{volume: vol_id, path: path})
-         when is_binary(vol_id) and is_binary(path) do
-      {:ok, {:existing, vol_id, path}}
-    end
-
-    defp validate_mount(%{name: name, path: path, size_gb: size})
-         when is_binary(name) and is_binary(path) and is_integer(size) and size > 0 do
-      {:ok, {:create, name, path, size}}
-    end
-
-    defp validate_mount(mount) do
-      {:error, {:invalid_mount, mount}}
-    end
-
-    defp resolve_mounts(validated_mounts, app_name, region, api_token) do
-      resolve_mounts(validated_mounts, app_name, region, api_token, [], [])
-    end
-
-    defp resolve_mounts([], _app, _region, _token, resolved, created) do
-      {:ok, Enum.reverse(resolved), Enum.reverse(created)}
-    end
-
-    defp resolve_mounts([{:existing, vol_id, path} | rest], app, region, token, resolved, created) do
-      mount = %{volume: vol_id, path: path}
-      resolve_mounts(rest, app, region, token, [mount | resolved], created)
-    end
-
-    defp resolve_mounts(
-           [{:create, name, path, size} | rest],
-           app,
-           region,
-           token,
-           resolved,
-           created
-         ) do
-      case Client.create_volume(app, name, size, region, token) do
-        {:ok, %{"id" => vol_id}} ->
-          mount = %{volume: vol_id, path: path}
-          resolve_mounts(rest, app, region, token, [mount | resolved], [vol_id | created])
-
-        {:error, reason} ->
-          cleanup_volumes(created, app, token)
-          {:error, {:volume_creation_failed, name, reason}}
-      end
-    end
-
-    defp cleanup_volumes([], _app, _token), do: :ok
-
-    defp cleanup_volumes(volume_ids, app_name, api_token) do
-      Enum.each(volume_ids, fn vol_id ->
-        Client.delete_volume(app_name, vol_id, api_token)
-      end)
     end
 
     defp maybe_add_mounts(body, []), do: body
