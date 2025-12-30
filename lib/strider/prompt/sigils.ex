@@ -43,7 +43,7 @@ if Code.ensure_loaded?(Solid) do
     @doc """
     Sigil for compile-time validated Solid (Liquid) templates.
 
-    Parses the template at compile time using `Strider.Prompt.Solid.parse!/1`.
+    Parses the template at compile time using `Solid.parse/1`.
     If the template is invalid, compilation will fail with a descriptive error.
 
     ## Examples
