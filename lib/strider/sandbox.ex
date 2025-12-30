@@ -337,70 +337,22 @@ defmodule Strider.Sandbox do
       custom_opts = Keyword.get(opts, :options, %{})
       body = Jason.encode!(%{prompt: content, options: custom_opts})
 
-      stream =
-        Stream.resource(
-          fn -> start_prompt_request(url, body, timeout) end,
-          &receive_prompt_chunks/1,
-          &cleanup_prompt_request/1
-        )
-        |> NDJSON.stream()
+      case Req.post(url,
+             body: body,
+             headers: [{"content-type", "application/json"}],
+             into: :self,
+             receive_timeout: timeout
+           ) do
+        {:ok, %{status: status, body: async_body}} when status in 200..299 ->
+          stream = async_body |> NDJSON.stream()
+          {:ok, stream}
 
-      {:ok, stream}
-    end
-  end
+        {:ok, %{status: status, body: body}} ->
+          {:error, {:http_error, status, body}}
 
-  defp start_prompt_request(url, body, timeout) do
-    caller = self()
-    ref = make_ref()
-
-    pid =
-      spawn_link(fn ->
-        try do
-          Req.post!(url,
-            body: body,
-            headers: [{"content-type", "application/json"}],
-            into: fn {:data, data}, acc ->
-              send(caller, {ref, {:data, data}})
-              {:cont, acc}
-            end,
-            receive_timeout: timeout
-          )
-
-          send(caller, {ref, :done})
-        rescue
-          e -> send(caller, {ref, {:error, Exception.message(e)}})
-        end
-      end)
-
-    {ref, pid, timeout}
-  end
-
-  defp receive_prompt_chunks({ref, pid, timeout} = state) do
-    receive do
-      {^ref, {:data, data}} ->
-        {[data], state}
-
-      {^ref, :done} ->
-        {:halt, state}
-
-      {^ref, {:error, reason}} ->
-        raise "Prompt request failed: #{reason}"
-
-      {:EXIT, ^pid, reason} ->
-        raise "Prompt request process died: #{inspect(reason)}"
-    after
-      timeout ->
-        raise "Prompt request timed out"
-    end
-  end
-
-  defp cleanup_prompt_request({_ref, pid, _timeout}) do
-    Process.exit(pid, :kill)
-
-    receive do
-      {:EXIT, ^pid, _} -> :ok
-    after
-      100 -> :ok
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   end
 
