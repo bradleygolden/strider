@@ -25,6 +25,7 @@ defmodule Strider.Sandbox do
   Strider.Sandbox uses an adapter pattern for different backends:
 
   - `Strider.Sandbox.Adapters.Docker` - Docker containers (local development)
+  - `Strider.Sandbox.Adapters.Fly` - Fly.io Machines (production)
   - `Strider.Sandbox.Adapters.Test` - In-memory testing adapter
 
   Custom adapters can be created by implementing the `Strider.Sandbox.Adapter` behaviour.
