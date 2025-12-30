@@ -1,6 +1,10 @@
 defmodule Strider.Sandbox.Instance do
   @moduledoc """
   Struct representing a sandbox instance.
+
+  This is a lightweight handle to an existing sandbox. The actual sandbox
+  state lives in the infrastructure (Docker container, Fly machine, etc.)
+  and should be queried via `Strider.Sandbox.status/1`.
   """
 
   @type t :: %__MODULE__{
@@ -8,12 +12,11 @@ defmodule Strider.Sandbox.Instance do
           adapter: module(),
           config: map(),
           metadata: map(),
-          status: :running | :stopped | :terminated,
           created_at: integer()
         }
 
   @enforce_keys [:id, :adapter]
-  defstruct [:id, :adapter, :config, metadata: %{}, status: :running, created_at: nil]
+  defstruct [:id, :adapter, :config, metadata: %{}, created_at: nil]
 
   @doc """
   Creates a new Instance struct with the given attributes.
