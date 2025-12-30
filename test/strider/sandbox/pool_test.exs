@@ -119,7 +119,7 @@ defmodule Strider.Sandbox.PoolTest do
 
       wait_for_pool_size(pid, "ord", 1)
 
-      Process.sleep(10)
+      receive after: (10 -> :ok)
 
       assert {:cold, :pool_empty} = Pool.checkout(pid, "ord")
 
@@ -170,9 +170,10 @@ defmodule Strider.Sandbox.PoolTest do
       config = build_config()
       {:ok, pid} = Pool.start_link(config)
 
+      ref = Process.monitor(pid)
       send(pid, {:sandbox_failed, "ord", :test_error})
 
-      Process.sleep(10)
+      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 100
       assert Process.alive?(pid)
 
       GenServer.stop(pid)
@@ -297,8 +298,7 @@ defmodule Strider.Sandbox.PoolTest do
     if current_size >= target_size do
       :ok
     else
-      Process.sleep(50)
-      do_wait_for_pool_size(pid, partition, target_size, deadline)
+      receive after: (50 -> do_wait_for_pool_size(pid, partition, target_size, deadline))
     end
   end
 end
