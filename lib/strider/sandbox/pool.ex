@@ -80,8 +80,6 @@ defmodule Strider.Sandbox.Pool do
   """
   @spec start_link(config(), keyword()) :: GenServer.on_start()
   def start_link(config, opts \\ []) do
-    {name, opts} = Keyword.pop(opts, :name)
-    opts = if name, do: Keyword.put(opts, :name, name), else: opts
     GenServer.start_link(__MODULE__, config, opts)
   end
 
@@ -219,22 +217,9 @@ defmodule Strider.Sandbox.Pool do
     })
 
     {result, state} = pop_warm_sandbox(state, partition)
+    result_type = elem(result, 0)
 
-    state =
-      case result do
-        {:warm, _} ->
-          send(self(), :replenish)
-          state
-
-        {:cold, _} ->
-          state
-      end
-
-    result_type =
-      case result do
-        {:warm, _} -> :warm
-        {:cold, _} -> :cold
-      end
+    if result_type == :warm, do: send(self(), :replenish)
 
     duration = System.monotonic_time() - start_time
 
