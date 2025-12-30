@@ -25,6 +25,14 @@ A sandbox runtime abstraction. Create isolated execution environments across dif
 - Hide infrastructure details behind layers of indirection
 - Make decisions the caller should make
 
+## Goal
+
+Your task is to make this repo clean AF for users. Do this by:
+
+1. Reviewing the codebase
+2. Refactoring as needed
+3. Reviewing your changes
+
 ## Workflow
 
 Commit after each completed shippable change. Small, atomic commits that each leave the codebase in a working state.

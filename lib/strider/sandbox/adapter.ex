@@ -76,14 +76,18 @@ defmodule Strider.Sandbox.Adapter do
   @doc """
   Terminates and cleans up the sandbox.
 
+  Options may include adapter-specific credentials (e.g., `:api_token` for Fly).
+
   Returns `:ok` on success or `{:error, reason}` on failure.
   """
-  @callback terminate(sandbox_id()) :: :ok | {:error, term()}
+  @callback terminate(sandbox_id(), opts()) :: :ok | {:error, term()}
 
   @doc """
   Gets the current status of the sandbox.
+
+  Options may include adapter-specific credentials (e.g., `:api_token` for Fly).
   """
-  @callback status(sandbox_id()) :: :running | :stopped | :terminated | :unknown
+  @callback status(sandbox_id(), opts()) :: :running | :stopped | :terminated | :unknown
 
   @doc """
   Gets the URL for an exposed port on the sandbox.

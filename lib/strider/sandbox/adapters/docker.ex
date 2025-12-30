@@ -84,13 +84,13 @@ defmodule Strider.Sandbox.Adapters.Docker do
   end
 
   @impl true
-  def terminate(container_id) do
+  def terminate(container_id, _opts \\ []) do
     System.cmd("docker", ["rm", "-f", container_id], stderr_to_stdout: true)
     :ok
   end
 
   @impl true
-  def status(container_id) do
+  def status(container_id, _opts \\ []) do
     case System.cmd("docker", ["inspect", "-f", "{{.State.Status}}", container_id],
            stderr_to_stdout: true
          ) do

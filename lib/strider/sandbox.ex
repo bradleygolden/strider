@@ -119,7 +119,8 @@ defmodule Strider.Sandbox do
   @spec exec(Instance.t(), String.t(), keyword()) ::
           {:ok, Strider.Sandbox.ExecResult.t()} | {:error, term()}
   def exec(%Instance{} = sandbox, command, opts \\ []) do
-    sandbox.adapter.exec(sandbox.id, command, opts)
+    merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+    sandbox.adapter.exec(sandbox.id, command, merged_opts)
   end
 
   @doc """
@@ -131,7 +132,7 @@ defmodule Strider.Sandbox do
   """
   @spec terminate(Instance.t()) :: :ok | {:error, term()}
   def terminate(%Instance{} = sandbox) do
-    sandbox.adapter.terminate(sandbox.id)
+    sandbox.adapter.terminate(sandbox.id, config_to_opts(sandbox.config))
   end
 
   @doc """
@@ -143,7 +144,7 @@ defmodule Strider.Sandbox do
   """
   @spec status(Instance.t()) :: :running | :stopped | :terminated | :unknown
   def status(%Instance{} = sandbox) do
-    sandbox.adapter.status(sandbox.id)
+    sandbox.adapter.status(sandbox.id, config_to_opts(sandbox.config))
   end
 
   @doc """
@@ -178,7 +179,8 @@ defmodule Strider.Sandbox do
   @spec read_file(Instance.t(), String.t(), keyword()) :: {:ok, binary()} | {:error, term()}
   def read_file(%Instance{} = sandbox, path, opts \\ []) do
     if function_exported?(sandbox.adapter, :read_file, 3) do
-      sandbox.adapter.read_file(sandbox.id, path, opts)
+      merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+      sandbox.adapter.read_file(sandbox.id, path, merged_opts)
     else
       {:error, :not_implemented}
     end
@@ -194,7 +196,8 @@ defmodule Strider.Sandbox do
   @spec write_file(Instance.t(), String.t(), binary(), keyword()) :: :ok | {:error, term()}
   def write_file(%Instance{} = sandbox, path, content, opts \\ []) do
     if function_exported?(sandbox.adapter, :write_file, 4) do
-      sandbox.adapter.write_file(sandbox.id, path, content, opts)
+      merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+      sandbox.adapter.write_file(sandbox.id, path, content, merged_opts)
     else
       {:error, :not_implemented}
     end
@@ -212,10 +215,12 @@ defmodule Strider.Sandbox do
   """
   @spec write_files(Instance.t(), [{String.t(), binary()}], keyword()) :: :ok | {:error, term()}
   def write_files(%Instance{} = sandbox, files, opts \\ []) do
+    merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+
     if function_exported?(sandbox.adapter, :write_files, 3) do
-      sandbox.adapter.write_files(sandbox.id, files, opts)
+      sandbox.adapter.write_files(sandbox.id, files, merged_opts)
     else
-      write_files_sequentially(sandbox, files, opts)
+      write_files_sequentially(sandbox, files, merged_opts)
     end
   end
 
@@ -247,10 +252,12 @@ defmodule Strider.Sandbox do
   """
   @spec await_ready(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def await_ready(%Instance{adapter: adapter} = sandbox, opts \\ []) do
+    merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+
     if function_exported?(adapter, :await_ready, 3) do
-      adapter.await_ready(sandbox.id, sandbox.metadata, opts)
+      adapter.await_ready(sandbox.id, sandbox.metadata, merged_opts)
     else
-      poll_health_endpoint(sandbox, opts)
+      poll_health_endpoint(sandbox, merged_opts)
     end
   end
 
@@ -267,7 +274,8 @@ defmodule Strider.Sandbox do
   @spec stop(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def stop(%Instance{adapter: adapter} = sandbox, opts \\ []) do
     if function_exported?(adapter, :stop, 2) do
-      adapter.stop(sandbox.id, opts)
+      merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+      adapter.stop(sandbox.id, merged_opts)
     else
       {:error, :not_implemented}
     end
@@ -285,7 +293,8 @@ defmodule Strider.Sandbox do
   @spec start(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def start(%Instance{adapter: adapter} = sandbox, opts \\ []) do
     if function_exported?(adapter, :start, 2) do
-      adapter.start(sandbox.id, opts)
+      merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+      adapter.start(sandbox.id, merged_opts)
     else
       {:error, :not_implemented}
     end
@@ -304,7 +313,8 @@ defmodule Strider.Sandbox do
   @spec update(Instance.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def update(%Instance{adapter: adapter} = sandbox, config, opts \\ []) do
     if function_exported?(adapter, :update, 3) do
-      adapter.update(sandbox.id, config, opts)
+      merged_opts = Keyword.merge(config_to_opts(sandbox.config), opts)
+      adapter.update(sandbox.id, config, merged_opts)
     else
       {:error, :not_implemented}
     end
@@ -428,4 +438,7 @@ defmodule Strider.Sandbox do
 
   defp normalize_config(config) when is_map(config), do: config
   defp normalize_config(config) when is_list(config), do: Map.new(config)
+
+  defp config_to_opts(config) when is_map(config), do: Keyword.new(config)
+  defp config_to_opts(config) when is_list(config), do: config
 end

@@ -188,9 +188,9 @@ if Code.ensure_loaded?(Req) do
     Terminates and destroys the Fly Machine.
     """
     @impl true
-    def terminate(sandbox_id) do
+    def terminate(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
-      api_token = get_api_token!([])
+      api_token = get_api_token!(opts)
 
       case Client.delete("/apps/#{app_name}/machines/#{machine_id}?force=true", api_token) do
         {:ok, _} -> :ok
@@ -219,7 +219,7 @@ if Code.ensure_loaded?(Req) do
     def terminate_with_app(sandbox_id, opts \\ []) do
       {app_name, _machine_id} = parse_sandbox_id!(sandbox_id)
 
-      with :ok <- terminate(sandbox_id) do
+      with :ok <- terminate(sandbox_id, opts) do
         if Keyword.get(opts, :destroy_app, false) do
           api_token = get_api_token!(opts)
           Client.delete_app(app_name, api_token)
@@ -233,9 +233,9 @@ if Code.ensure_loaded?(Req) do
     Gets the current status of the Fly Machine.
     """
     @impl true
-    def status(sandbox_id) do
+    def status(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
-      api_token = get_api_token!([])
+      api_token = get_api_token!(opts)
 
       case Client.get("/apps/#{app_name}/machines/#{machine_id}", api_token) do
         {:ok, %{"state" => "started"}} -> :running

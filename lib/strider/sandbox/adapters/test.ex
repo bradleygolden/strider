@@ -109,7 +109,7 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
-  def terminate(sandbox_id) do
+  def terminate(sandbox_id, _opts \\ []) do
     Agent.update(__MODULE__, fn state ->
       put_in(state, [:sandboxes, sandbox_id, :status], :terminated)
     end)
@@ -118,7 +118,7 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
-  def status(sandbox_id) do
+  def status(sandbox_id, _opts \\ []) do
     Agent.get(__MODULE__, fn state ->
       get_in(state, [:sandboxes, sandbox_id, :status]) || :unknown
     end)
