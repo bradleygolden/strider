@@ -240,49 +240,38 @@ defmodule Strider.Sandbox.Pool do
 
     {result, state} = pop_warm_sandbox(state, partition)
 
-    case result do
-      {:warm, sandbox_info} ->
-        sandbox =
-          Sandbox.from_id(
-            state.config.adapter,
-            sandbox_info.sandbox_id,
-            %{},
-            sandbox_info.metadata
-          )
+    {reply, result_type} =
+      case result do
+        {:warm, sandbox_info} ->
+          sandbox =
+            Sandbox.from_id(
+              state.config.adapter,
+              sandbox_info.sandbox_id,
+              %{},
+              sandbox_info.metadata
+            )
 
-        case Sandbox.update(sandbox, update_config, opts) do
-          {:ok, _} ->
-            send(self(), :replenish)
-            duration = System.monotonic_time() - start_time
+          case Sandbox.update(sandbox, update_config, opts) do
+            {:ok, _} ->
+              send(self(), :replenish)
+              {{:warm, sandbox}, :warm}
 
-            emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-              partition: partition,
-              result: :warm
-            })
+            {:error, reason} ->
+              {{:error, reason}, :error}
+          end
 
-            {:reply, {:warm, sandbox}, state}
+        {:cold, :pool_empty} ->
+          {{:cold, :pool_empty}, :cold}
+      end
 
-          {:error, reason} ->
-            duration = System.monotonic_time() - start_time
+    duration = System.monotonic_time() - start_time
 
-            emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-              partition: partition,
-              result: :error
-            })
+    emit_telemetry([:checkout, :stop], %{duration: duration}, %{
+      partition: partition,
+      result: result_type
+    })
 
-            {:reply, {:error, reason}, state}
-        end
-
-      {:cold, :pool_empty} ->
-        duration = System.monotonic_time() - start_time
-
-        emit_telemetry([:checkout, :stop], %{duration: duration}, %{
-          partition: partition,
-          result: :cold
-        })
-
-        {:reply, {:cold, :pool_empty}, state}
-    end
+    {:reply, reply, state}
   end
 
   def handle_call(:status, _from, state) do
