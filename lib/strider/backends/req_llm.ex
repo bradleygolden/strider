@@ -153,12 +153,14 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     defp normalize_response(response, model) do
-      content = extract_content(response)
+      content = ReqLLM.Response.text(response)
+      tool_calls = extract_tool_calls(response)
       usage = ReqLLM.Response.usage(response) || %{}
       finish_reason = ReqLLM.Response.finish_reason(response)
 
       Response.new(
         content: content,
+        tool_calls: tool_calls,
         finish_reason: normalize_finish_reason(finish_reason),
         usage: normalize_usage(usage),
         metadata: build_metadata(response, model, finish_reason)
@@ -208,8 +210,45 @@ if Code.ensure_loaded?(ReqLLM) do
       end
     end
 
-    defp extract_content(%ReqLLM.Response{message: nil}), do: nil
-    defp extract_content(%ReqLLM.Response{message: %{content: content}}), do: content
+    defp extract_tool_calls(response) do
+      response
+      |> ReqLLM.Response.tool_calls()
+      |> Enum.map(&normalize_tool_call/1)
+    end
+
+    defp normalize_tool_call(%ReqLLM.ToolCall{id: id, function: %{name: name, arguments: args}}) do
+      %{
+        id: id,
+        name: name,
+        arguments: decode_arguments(args)
+      }
+    end
+
+    defp normalize_tool_call(%{id: id, name: name, arguments: args}) do
+      %{
+        id: id,
+        name: name,
+        arguments: decode_arguments(args)
+      }
+    end
+
+    defp normalize_tool_call(%{name: name, arguments: args}) do
+      %{
+        id: nil,
+        name: name,
+        arguments: decode_arguments(args)
+      }
+    end
+
+    defp decode_arguments(args) when is_binary(args) do
+      case Jason.decode(args) do
+        {:ok, map} -> map
+        {:error, _} -> %{}
+      end
+    end
+
+    defp decode_arguments(args) when is_map(args), do: args
+    defp decode_arguments(_), do: %{}
 
     defp normalize_finish_reason(:stop), do: :stop
     defp normalize_finish_reason(:length), do: :max_tokens
