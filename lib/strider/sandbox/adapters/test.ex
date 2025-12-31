@@ -189,7 +189,11 @@ defmodule Strider.Sandbox.Adapters.Test do
         {:error, :agent_not_running}
 
       _pid ->
-        Agent.update(__MODULE__, &update_sandbox_state(&1, sandbox_id, path, value))
+        try do
+          Agent.update(__MODULE__, &update_sandbox_state(&1, sandbox_id, path, value))
+        catch
+          :exit, _ -> {:error, :agent_not_running}
+        end
     end
   end
 
