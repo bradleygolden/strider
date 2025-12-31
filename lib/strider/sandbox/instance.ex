@@ -16,7 +16,7 @@ defmodule Strider.Sandbox.Instance do
         }
 
   @enforce_keys [:id, :adapter]
-  defstruct [:id, :adapter, :config, metadata: %{}, created_at: nil]
+  defstruct [:id, :adapter, config: %{}, metadata: %{}, created_at: nil]
 
   @doc """
   Creates a new Instance struct with the given attributes.
