@@ -1,6 +1,6 @@
 # Strider
 
-An agent framework for Elixir.
+An AI agent framework for Elixir.
 
 ## Why?
 
