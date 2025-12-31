@@ -53,6 +53,7 @@ defmodule Strider.Agent do
   - `:hooks` - Hook module(s) for lifecycle events (see `Strider.Hooks`)
   - `:temperature` - Sampling temperature (passed to backend)
   - `:max_tokens` - Maximum tokens in response (passed to backend)
+  - `:top_p` - Nucleus sampling parameter (passed to backend)
 
   ## Hooks
 
