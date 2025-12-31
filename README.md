@@ -384,20 +384,12 @@ Write your own by implementing `Strider.Backend`.
 
 ## Development
 
-### Sandbox Image
-
-The sandbox image (`ghcr.io/bradleygolden/strider-sandbox`) provides:
-- Network isolation via iptables (no outbound traffic by default)
-- Polyglot runtime (Python 3, Node.js)
-- Non-root execution (runs as `sandbox` user)
-
-**Using a specific version:**
-
-```elixir
-Sandbox.create({Docker, %{image: "ghcr.io/bradleygolden/strider-sandbox:latest"}})
+```bash
+mix test                    # Excludes docker tests
+mix test --include docker   # Runs docker integration tests
 ```
 
-**Building and pushing (multi-arch for Mac + Fly.io):**
+### Building the Sandbox Image
 
 ```bash
 REF=$(git rev-parse --short HEAD)
@@ -406,15 +398,6 @@ REF=$(git rev-parse --short HEAD)
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t ghcr.io/bradleygolden/strider-sandbox:$REF \
   -f priv/sandbox/Dockerfile priv/sandbox --push
-```
-
-### Running Integration Tests
-
-Docker integration tests are excluded by default:
-
-```bash
-mix test                    # Excludes docker tests
-mix test --include docker   # Runs docker integration tests
 ```
 
 ## Ecosystem
