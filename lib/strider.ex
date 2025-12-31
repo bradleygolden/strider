@@ -108,7 +108,11 @@ defmodule Strider do
 
   @spec call(term(), keyword()) :: {:ok, Response.t(), Context.t()} | {:error, term()}
   def call(content, opts) when is_list(opts) do
-    model = Keyword.fetch!(opts, :model)
+    model =
+      Keyword.get(opts, :model) ||
+        raise ArgumentError,
+              "model option is required, e.g. model: \"anthropic:claude-sonnet-4-5\""
+
     {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
     {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
     {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
@@ -163,7 +167,11 @@ defmodule Strider do
 
   @spec stream(term(), keyword()) :: {:ok, Enumerable.t(), Context.t()} | {:error, term()}
   def stream(content, opts) when is_list(opts) do
-    model = Keyword.fetch!(opts, :model)
+    model =
+      Keyword.get(opts, :model) ||
+        raise ArgumentError,
+              "model option is required, e.g. model: \"anthropic:claude-sonnet-4-5\""
+
     {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
     {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
     {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
