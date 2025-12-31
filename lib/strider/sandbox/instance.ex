@@ -23,8 +23,9 @@ defmodule Strider.Sandbox.Instance do
 
   ## Examples
 
-      iex> Strider.Sandbox.Instance.new(id: "abc123", adapter: Docker)
-      %Strider.Sandbox.Instance{id: "abc123", adapter: Docker, config: %{}, metadata: %{}, created_at: _}
+      iex> instance = Strider.Sandbox.Instance.new(id: "abc123", adapter: Docker)
+      iex> {instance.id, instance.adapter, instance.config, instance.metadata}
+      {"abc123", Docker, %{}, %{}}
 
   """
   @spec new(keyword()) :: t()
