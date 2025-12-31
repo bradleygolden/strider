@@ -8,7 +8,7 @@ defmodule Strider.Agent do
 
   The backend is specified as a tuple: `{backend_type, backend_config}` where:
 
-  - `backend_type` is a backend module (e.g., `Strider.Backends.ReqLLM`) or the `:mock` shortcut
+  - `backend_type` is a backend module (e.g., `Strider.Backends.ReqLLM`) or a shortcut (`:mock`, `:req_llm`)
   - `backend_config` is backend-specific (model string, keyword list, etc.)
 
   ## Creating Agents
@@ -30,14 +30,16 @@ defmodule Strider.Agent do
 
   ## Backend Examples
 
-      # Strider.Backends.ReqLLM with different providers (requires :req_llm dep)
-      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"})
-      Strider.Agent.new({Strider.Backends.ReqLLM, "openai:gpt-4"})
-      Strider.Agent.new({Strider.Backends.ReqLLM, "openrouter:anthropic/claude-sonnet-4-5"})
+      # Using :req_llm shortcut (requires :req_llm dep)
+      Strider.Agent.new({:req_llm, "anthropic:claude-sonnet-4-5"})
+      Strider.Agent.new({:req_llm, "openai:gpt-4"})
+      Strider.Agent.new({:req_llm, "openrouter:anthropic/claude-sonnet-4-5"})
+
+      # Or use the full module name
       Strider.Agent.new({Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"})
 
       # With BYOK (Bring Your Own Key)
-      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
+      Strider.Agent.new({:req_llm, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
 
       # Mock backend for testing
       Strider.Agent.new({:mock, response: "Hello!"})
@@ -172,6 +174,7 @@ defmodule Strider.Agent do
   end
 
   defp resolve_backend_module(:mock), do: Strider.Backends.Mock
+  defp resolve_backend_module(:req_llm), do: Strider.Backends.ReqLLM
 
   defp resolve_backend_module(module) when is_atom(module) do
     # Check if it's a module (has module info) or unknown atom
