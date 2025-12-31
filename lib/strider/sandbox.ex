@@ -61,12 +61,12 @@ defmodule Strider.Sandbox do
 
     with {:ok, sandbox_id, metadata} <- adapter_module.create(config_map) do
       sandbox =
-        Instance.new(%{
+        Instance.new(
           id: sandbox_id,
           adapter: adapter_module,
           config: config_map,
           metadata: metadata
-        })
+        )
 
       {:ok, sandbox}
     end
@@ -85,12 +85,12 @@ defmodule Strider.Sandbox do
   """
   @spec from_id(module(), String.t(), map(), map()) :: Instance.t()
   def from_id(adapter_module, sandbox_id, config \\ %{}, metadata \\ %{}) do
-    Instance.new(%{
+    Instance.new(
       id: sandbox_id,
       adapter: adapter_module,
       config: config,
       metadata: metadata
-    })
+    )
   end
 
   @doc """

@@ -20,9 +20,17 @@ defmodule Strider.Sandbox.Instance do
 
   @doc """
   Creates a new Instance struct with the given attributes.
+
+  ## Examples
+
+      iex> Strider.Sandbox.Instance.new(id: "abc123", adapter: Docker)
+      %Strider.Sandbox.Instance{id: "abc123", adapter: Docker, config: %{}, metadata: %{}, created_at: _}
+
   """
-  @spec new(map()) :: t()
-  def new(attrs) do
-    struct!(__MODULE__, Map.put(attrs, :created_at, System.monotonic_time(:millisecond)))
+  @spec new(keyword()) :: t()
+  def new(attrs \\ []) do
+    attrs
+    |> Keyword.put_new_lazy(:created_at, fn -> System.monotonic_time(:millisecond) end)
+    |> then(&struct!(__MODULE__, &1))
   end
 end
