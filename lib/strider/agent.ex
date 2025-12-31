@@ -240,6 +240,7 @@ defmodule Strider.Agent do
       iex> Strider.Agent.get_config(agent, :temperature)
       0.7
 
+      iex> agent = Strider.Agent.new({:mock, response: "Hello"})
       iex> Strider.Agent.get_config(agent, :missing, 1.0)
       1.0
 
