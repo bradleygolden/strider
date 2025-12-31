@@ -203,6 +203,7 @@ Hooks enable middleware-like transformations at each stage of agent execution:
 ```elixir
 defmodule MyApp.LoggingHooks do
   @behaviour Strider.Hooks
+  require Logger
 
   @impl true
   def on_call_start(_agent, content, _context) do
