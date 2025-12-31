@@ -58,7 +58,7 @@ defmodule Strider.Backend do
 
   ## Optional Callbacks
 
-  - `introspect/0` - Returns metadata about the backend
+  - `introspect/1` - Returns metadata about the backend
 
   """
 
