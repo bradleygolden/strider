@@ -161,29 +161,43 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def stop(sandbox_id, _opts \\ []) do
-    update_sandbox(sandbox_id, [:status], :stopped)
-    {:ok, %{}}
+    case update_sandbox(sandbox_id, [:status], :stopped) do
+      :ok -> {:ok, %{}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @impl true
   def start(sandbox_id, _opts \\ []) do
-    update_sandbox(sandbox_id, [:status], :running)
-    {:ok, %{}}
+    case update_sandbox(sandbox_id, [:status], :running) do
+      :ok -> {:ok, %{}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @impl true
   def update(sandbox_id, config, _opts \\ []) do
-    update_sandbox(sandbox_id, [:config], config)
-    {:ok, %{}}
+    case update_sandbox(sandbox_id, [:config], config) do
+      :ok -> {:ok, %{}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp update_sandbox(sandbox_id, path, value) do
-    Agent.update(__MODULE__, fn state ->
-      if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id | path], value)
-      else
-        state
-      end
-    end)
+    case Process.whereis(__MODULE__) do
+      nil ->
+        {:error, :agent_not_running}
+
+      _pid ->
+        Agent.update(__MODULE__, &update_sandbox_state(&1, sandbox_id, path, value))
+    end
+  end
+
+  defp update_sandbox_state(state, sandbox_id, path, value) do
+    if get_in(state, [:sandboxes, sandbox_id]) do
+      put_in(state, [:sandboxes, sandbox_id | path], value)
+    else
+      state
+    end
   end
 end
