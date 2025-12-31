@@ -29,7 +29,7 @@ if Code.ensure_loaded?(:telemetry) do
       - Metadata: `%{agent: Agent.t(), prompt: String.t(), context: Context.t()}`
 
     - `[:strider, :call, :stop]` - When a call completes successfully
-      - Measurements: `%{duration: integer}` (in native time units)
+      - Measurements: `%{system_time: integer}`
       - Metadata: `%{agent: Agent.t(), response: Response.t(), context: Context.t()}`
 
     - `[:strider, :call, :error]` - When a call fails
