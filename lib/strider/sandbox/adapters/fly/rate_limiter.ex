@@ -1,22 +1,5 @@
 defmodule Strider.Sandbox.Adapters.Fly.RateLimiter do
-  @moduledoc """
-  Token bucket rate limiter for the Fly Machines API.
-
-  Proactively enforces rate limits to prevent hitting 429 responses.
-  Uses `Process.send_after/3` for idiomatic token refill scheduling.
-
-  ## Rate Limits (from Fly API docs)
-
-    * Mutations (create, start, stop, delete): 1 req/s, 3 burst
-    * Reads (GET): 5 req/s, 10 burst
-
-  ## Usage
-
-      :ok = RateLimiter.acquire(:mutation)
-      # Make your API call...
-
-  The rate limiter starts on-demand when first called.
-  """
+  @moduledoc false
 
   use GenServer
 

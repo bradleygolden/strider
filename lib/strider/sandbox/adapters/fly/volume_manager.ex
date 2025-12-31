@@ -1,23 +1,6 @@
 if Code.ensure_loaded?(Req) do
   defmodule Strider.Sandbox.Adapters.Fly.VolumeManager do
-    @moduledoc """
-    Manages Fly volume lifecycle for sandbox mounts.
-
-    Handles validation, resolution (creating volumes for auto-create mounts),
-    and cleanup of volumes.
-
-    ## Mount Types
-
-    Two mount types are supported:
-
-    1. **Existing volume** - Attach an existing Fly volume by ID:
-       `%{volume: "vol_abc123", path: "/data"}`
-
-    2. **Auto-create volume** - Create a new volume on-demand:
-       `%{name: "workspace", path: "/workspace", size_gb: 10}`
-
-    Volumes created via auto-create are tracked and can be cleaned up on failure.
-    """
+    @moduledoc false
 
     alias Strider.Sandbox.Adapters.Fly.Client
 

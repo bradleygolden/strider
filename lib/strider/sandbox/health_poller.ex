@@ -1,19 +1,6 @@
 if Code.ensure_loaded?(Req) do
   defmodule Strider.Sandbox.HealthPoller do
-    @moduledoc """
-    One-shot GenServer for polling health endpoints.
-
-    Uses `Process.send_after/3` instead of `Process.sleep/1` for idiomatic
-    interval handling. The poller runs in its own process and notifies the
-    caller when the health check succeeds or fails.
-
-    ## Usage
-
-        {:ok, body} = HealthPoller.poll("http://localhost:4001/health",
-          timeout: 30_000,
-          interval: 1_000
-        )
-    """
+    @moduledoc false
 
     use GenServer
 

@@ -128,7 +128,8 @@ defmodule Strider.MixProject do
           Strider.Sandbox.Pool,
           Strider.Sandbox.Pool.Store,
           Strider.Sandbox.Pool.Store.Memory,
-          Strider.Sandbox.Pool.Store.Postgres
+          Strider.Sandbox.Pool.Store.Postgres,
+          Strider.Sandbox.Pool.Store.Postgres.Migrations
         ],
         Proxy: [
           Strider.Proxy.Sandbox

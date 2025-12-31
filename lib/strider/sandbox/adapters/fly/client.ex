@@ -1,21 +1,6 @@
 if Code.ensure_loaded?(Req) do
   defmodule Strider.Sandbox.Adapters.Fly.Client do
-    @moduledoc """
-    HTTP client for the Fly Machines API.
-
-    Uses a token bucket rate limiter to proactively enforce rate limits
-    and prevent 429 responses.
-
-    ## Rate Limits
-
-    Fly API has rate limits:
-    - 1 req/s per action (create, start, stop, delete)
-    - 3 req/s burst
-    - 5 req/s for GET machine (10 burst)
-
-    The rate limiter handles throttling. Retry logic is kept as a safety net
-    for transient 429s that slip through.
-    """
+    @moduledoc false
 
     alias Strider.Sandbox.Adapters.Fly.RateLimiter
 
