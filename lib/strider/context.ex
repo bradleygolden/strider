@@ -70,23 +70,6 @@ defmodule Strider.Context do
   end
 
   @doc """
-  Adds a pre-built message struct to the context.
-
-  ## Examples
-
-      iex> context = Strider.Context.new()
-      iex> message = Strider.Message.new(:user, "Hello!")
-      iex> context = Strider.Context.append_message(context, message)
-      iex> length(context.messages)
-      1
-
-  """
-  @spec append_message(t(), Message.t()) :: t()
-  def append_message(%__MODULE__{} = context, %Message{} = message) do
-    %{context | messages: context.messages ++ [message]}
-  end
-
-  @doc """
   Returns the messages in the context.
 
   ## Examples

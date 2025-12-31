@@ -70,18 +70,6 @@ defmodule Strider.ContextTest do
     end
   end
 
-  describe "append_message/2" do
-    test "appends a pre-built message" do
-      message = Message.new(:user, "Hello!")
-
-      context =
-        Context.new()
-        |> Context.append_message(message)
-
-      assert hd(context.messages) == message
-    end
-  end
-
   describe "messages/1" do
     test "returns Message structs" do
       context =
