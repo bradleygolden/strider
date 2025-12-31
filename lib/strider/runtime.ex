@@ -1,15 +1,5 @@
 defmodule Strider.Runtime do
-  @moduledoc """
-  Orchestrates agent calls and streaming.
-
-  The runtime is responsible for:
-  - Building messages from context and system prompt
-  - Calling the appropriate backend
-  - Updating context with responses
-  - Invoking hooks at lifecycle points (with transformation support)
-
-  This module is used internally by `Strider.call/4` and `Strider.stream/4`.
-  """
+  @moduledoc false
 
   alias Strider.{Agent, Context, Hooks, Message, Response}
 
