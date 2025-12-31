@@ -143,8 +143,10 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp streaming_request?(body) do
-      String.contains?(body, "\"stream\":true") or
-        String.contains?(body, "\"stream\": true")
+      case Jason.decode(body) do
+        {:ok, %{"stream" => true}} -> true
+        _ -> false
+      end
     end
 
     defp stream_request(conn, url, headers, body, timeout) do
