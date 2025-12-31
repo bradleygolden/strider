@@ -231,9 +231,13 @@ defmodule Strider.Content do
 
   Handles convenience cases at API entry points:
   - Strings are wrapped as text parts
-  - Maps/structs are JSON-encoded into text parts (useful for structured output)
   - Part structs are wrapped in a list
   - Lists of parts pass through unchanged
+  - Maps are JSON-encoded into text parts
+
+  Maps are JSON-encoded to support tool results and structured data
+  in multi-turn conversations. When a tool returns structured data
+  like `%{result: 42}`, this is serialized so the LLM can read it.
 
   ## Examples
 
@@ -246,9 +250,9 @@ defmodule Strider.Content do
       Content.wrap([Content.text("Hi"), Content.image_url("...")])
       #=> [%Part{...}, %Part{...}]
 
-      # Maps are JSON-encoded (for structured output from schemas)
-      Content.wrap(%{name: "Alice", age: 30})
-      #=> [%Part{type: :text, text: "{\"age\":30,\"name\":\"Alice\"}"}]
+      # Maps are JSON-encoded (for tool results, structured data)
+      Content.wrap(%{result: 42, status: "success"})
+      #=> [%Part{type: :text, text: "{\"result\":42,\"status\":\"success\"}"}]
 
   """
   @spec wrap(String.t() | Part.t() | [Part.t()] | map()) :: [Part.t()]
