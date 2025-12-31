@@ -2,7 +2,7 @@
 
 ## What Strider Is
 
-A sandbox runtime abstraction. Create isolated execution environments across different infrastructure backends.
+An AI agent framework that simplifies the creation of AI agents within codebases.
 
 ## Core Principle
 
@@ -27,9 +27,11 @@ A sandbox runtime abstraction. Create isolated execution environments across dif
 
 ## Goal
 
-Your task is to make this repo clean AF for users. Do this by:
+Your task is to make this repo clean AF for users. Ultimately, I want this library to make it simple to create AI agents within codebases.
 
-1. Reviewing the codebase
+Do this by:
+
+1. Reviewing the codebase (starting with README.md)
 2. Refactoring as needed
 3. Reviewing your changes
 
