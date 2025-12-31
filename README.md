@@ -317,7 +317,7 @@ alias Strider.Sandbox.Adapters.Fly
   mounts: [%{name: "data", path: "/data", size_gb: 10}]
 }})
 
-Sandbox.await_ready(sandbox, port: 4001)
+{:ok, _metadata} = Sandbox.await_ready(sandbox, port: 4001)
 {:ok, result} = Sandbox.exec(sandbox, "node --version")
 ```
 
