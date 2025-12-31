@@ -8,7 +8,7 @@ defmodule Strider.Agent do
 
   The backend is specified as a tuple: `{backend_type, backend_config}` where:
 
-  - `backend_type` is an atom (`:mock`) or a backend module (e.g., `Strider.Backends.ReqLLM`)
+  - `backend_type` is a backend module (e.g., `Strider.Backends.ReqLLM`) or the `:mock` shortcut
   - `backend_config` is backend-specific (model string, keyword list, etc.)
 
   ## Creating Agents
