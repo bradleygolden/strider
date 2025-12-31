@@ -32,7 +32,7 @@ defmodule StriderTest do
     end
 
     test "preserves conversation history" do
-      agent = Agent.new({:mock, responses: ["First reply", "Second reply"]})
+      agent = Agent.new({:mock, response: "Reply"})
       context = Context.new()
 
       {:ok, _response1, context} = Strider.call(agent, "First message", context)
