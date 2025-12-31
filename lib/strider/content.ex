@@ -229,8 +229,11 @@ defmodule Strider.Content do
   @doc """
   Wraps content into a list of Content.Part structs.
 
-  Handles the string convenience case at API entry points.
-  Strings are automatically wrapped as text parts.
+  Handles convenience cases at API entry points:
+  - Strings are wrapped as text parts
+  - Maps/structs are JSON-encoded into text parts (useful for structured output)
+  - Part structs are wrapped in a list
+  - Lists of parts pass through unchanged
 
   ## Examples
 
@@ -242,6 +245,10 @@ defmodule Strider.Content do
 
       Content.wrap([Content.text("Hi"), Content.image_url("...")])
       #=> [%Part{...}, %Part{...}]
+
+      # Maps are JSON-encoded (for structured output from schemas)
+      Content.wrap(%{name: "Alice", age: 30})
+      #=> [%Part{type: :text, text: "{\"age\":30,\"name\":\"Alice\"}"}]
 
   """
   @spec wrap(String.t() | Part.t() | [Part.t()] | map()) :: [Part.t()]
