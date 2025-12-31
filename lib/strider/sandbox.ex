@@ -308,17 +308,39 @@ defmodule Strider.Sandbox do
 
   - `:port` - The port the sandbox server is listening on (default: 4001)
   - `:timeout` - Request timeout in milliseconds (default: 60_000)
+  - `:options` - Custom options passed to the sandbox server (default: %{})
+
+  ## Event Format
+
+  The stream yields maps with a `"type"` key indicating the event type:
+
+      %{"type" => "text", "text" => "Hello!"}
+      %{"type" => "tool_call", "name" => "run_code", "arguments" => %{...}}
+      %{"type" => "tool_result", "content" => "..."}
+      %{"type" => "error", "message" => "..."}
 
   ## Examples
 
       {:ok, stream} = Strider.Sandbox.prompt(sandbox, "Hello")
-      Enum.each(stream, fn event -> IO.inspect(event) end)
+      Enum.each(stream, fn event ->
+        case event do
+          %{"type" => "text", "text" => text} -> IO.write(text)
+          %{"type" => "error", "message" => msg} -> IO.puts("Error: \#{msg}")
+          _ -> :ok
+        end
+      end)
 
       # With content blocks for images/files
       {:ok, stream} = Strider.Sandbox.prompt(sandbox, [
         %{type: "text", text: "What's in this image?"},
         %{type: "file", media_type: "image/png", data: Base.encode64(bytes)}
       ])
+
+      # Accumulate full response
+      {:ok, stream} = Strider.Sandbox.prompt(sandbox, "Write a poem")
+      text = stream
+        |> Enum.filter(&match?(%{"type" => "text"}, &1))
+        |> Enum.map_join(&Map.get(&1, "text"))
   """
   @spec prompt(Instance.t(), prompt_content(), keyword()) ::
           {:ok, Enumerable.t()} | {:error, term()}
