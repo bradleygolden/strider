@@ -27,7 +27,7 @@ if Code.ensure_loaded?(ReqLLM) do
 
     ## Configuration
 
-    Additional options can be passed via the `:config` map:
+    Additional options can be passed as keyword arguments:
 
     - `:temperature` - Sampling temperature (0.0 to 2.0)
     - `:max_tokens` - Maximum tokens in response
@@ -39,7 +39,8 @@ if Code.ensure_loaded?(ReqLLM) do
         # Using Anthropic directly
         agent = Strider.Agent.new(
           {Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
-          config: %{temperature: 0.7, max_tokens: 1000}
+          temperature: 0.7,
+          max_tokens: 1000
         )
 
         # Using OpenRouter
