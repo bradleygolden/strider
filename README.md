@@ -278,7 +278,7 @@ alias Strider.Sandbox
 alias Strider.Sandbox.Adapters.Docker
 
 # Uses default sandbox image - no network access
-{:ok, sandbox} = Sandbox.create(Docker)
+{:ok, sandbox} = Sandbox.create({Docker, %{}})
 {:ok, result} = Sandbox.exec(sandbox, "python3 -c 'print(1+1)'")
 {:ok, result} = Sandbox.exec(sandbox, "node -e 'console.log(1+1)'")
 
