@@ -41,7 +41,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
   alias Strider.Sandbox.FileOps
   alias Strider.Sandbox.NetworkEnv
 
-  @default_image "ghcr.io/bradleygolden/strider-sandbox"
+  @default_image "ghcr.io/bradleygolden/strider-sandbox:d5215b5"
   @default_workdir "/workspace"
   @default_exec_timeout_ms 30_000
 

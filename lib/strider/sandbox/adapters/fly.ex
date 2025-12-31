@@ -78,7 +78,7 @@ if Code.ensure_loaded?(Req) do
     alias Strider.Sandbox.HealthPoller
     alias Strider.Sandbox.NetworkEnv
 
-    @default_image "ghcr.io/bradleygolden/strider-sandbox"
+    @default_image "ghcr.io/bradleygolden/strider-sandbox:d5215b5"
     @default_memory_mb 256
     @default_cpus 1
     @default_cpu_kind "shared"
