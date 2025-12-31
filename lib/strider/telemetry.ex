@@ -10,7 +10,7 @@ if Code.ensure_loaded?(:telemetry) do
 
     Use the hooks with your agent:
 
-        agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+        agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
           hooks: Strider.Telemetry.Hooks
         )
 

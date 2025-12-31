@@ -35,7 +35,7 @@ defmodule Strider.Content do
       {:ok, response, _ctx} = Strider.call([
         Content.text("Analyze this image"),
         Content.image_url("https://example.com/chart.png")
-      ], model: "anthropic:claude-4-5-sonnet")
+      ], model: "anthropic:claude-sonnet-4-5")
 
       # Multi-modal with roles
       messages = [

@@ -11,19 +11,19 @@ if Code.ensure_loaded?(ReqLLM) do
     The model must include the provider in `"provider:model"` format:
 
         # Direct API access
-        model: "anthropic:claude-4-5-sonnet"
+        model: "anthropic:claude-sonnet-4-5"
         model: "openai:gpt-4"
         model: "google:gemini-1.5-pro"
 
         # Via OpenRouter (access many models through one API)
-        model: "openrouter:anthropic/claude-4-5-sonnet"
+        model: "openrouter:anthropic/claude-sonnet-4-5"
         model: "openrouter:openai/gpt-4"
 
         # Via Amazon Bedrock
-        model: "amazon_bedrock:anthropic.claude-4-5-sonnet-20241022-v2:0"
+        model: "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"
 
         # Via Google Vertex AI
-        model: "google_vertex:claude-4-5-sonnet@20240620"
+        model: "google_vertex:claude-sonnet-4-5@20240620"
 
     ## Configuration
 
@@ -38,18 +38,18 @@ if Code.ensure_loaded?(ReqLLM) do
 
         # Using Anthropic directly
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+          {Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
           config: %{temperature: 0.7, max_tokens: 1000}
         )
 
         # Using OpenRouter
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "openrouter:anthropic/claude-4-5-sonnet"}
+          {Strider.Backends.ReqLLM, "openrouter:anthropic/claude-sonnet-4-5"}
         )
 
         # Using Amazon Bedrock
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-4-5-sonnet-20241022-v2:0"}
+          {Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"}
         )
 
     ## Supported Providers

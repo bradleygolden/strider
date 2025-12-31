@@ -44,7 +44,7 @@ end
 The simplest way to call an LLM - just pass your prompt and model:
 
 ```elixir
-{:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
+{:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-sonnet-4-5")
 
 IO.puts(response.content)
 # => "Hello! How can I help you today?"
@@ -54,7 +54,7 @@ Add a system prompt:
 
 ```elixir
 {:ok, response, _ctx} = Strider.call("Translate: Hello",
-  model: "anthropic:claude-4-5-sonnet",
+  model: "anthropic:claude-sonnet-4-5",
   system_prompt: "You are a translator. Translate to Spanish."
 )
 # => "Hola"
@@ -63,7 +63,7 @@ Add a system prompt:
 Stream responses:
 
 ```elixir
-{:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-4-5-sonnet")
+{:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-sonnet-4-5")
 
 Enum.each(stream, fn chunk ->
   IO.write(chunk.content)
@@ -116,21 +116,21 @@ alias Strider.Content
 {:ok, response, _ctx} = Strider.call([
   Content.text("What's in this image?"),
   Content.image_url("https://example.com/cat.png")
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 
 # Base64 image data
 image_bytes = File.read!("photo.png")
 {:ok, response, _ctx} = Strider.call([
   Content.text("Describe this photo"),
   Content.image(image_bytes, "image/png")
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 
 # PDF file
 pdf_bytes = File.read!("report.pdf")
 {:ok, response, _ctx} = Strider.call([
   Content.text("Summarize this document"),
   Content.file(pdf_bytes, "application/pdf", filename: "report.pdf")
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 ```
 
 Plain strings are automatically wrapped as text content.
@@ -144,7 +144,7 @@ Pass conversation history directly as messages:
   %{role: :user, content: "My name is Alice"},
   %{role: :assistant, content: "Nice to meet you, Alice!"},
   %{role: :user, content: "What's my name?"}
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 
 # => "Your name is Alice."
 ```
@@ -154,12 +154,12 @@ For stateful conversations across multiple calls, use the `:context` option:
 ```elixir
 # First call - get back the context
 {:ok, _response, context} = Strider.call("My name is Alice.",
-  model: "anthropic:claude-4-5-sonnet"
+  model: "anthropic:claude-sonnet-4-5"
 )
 
 # Second call - pass the context to continue the conversation
 {:ok, response, _context} = Strider.call("What's my name?",
-  model: "anthropic:claude-4-5-sonnet",
+  model: "anthropic:claude-sonnet-4-5",
   context: context
 )
 
@@ -173,7 +173,7 @@ You can also combine messages with an existing context - messages are appended:
   %{role: :user, content: "What's 2+2?"},
   %{role: :assistant, content: "4"},
   %{role: :user, content: "And what's that times 10?"}
-], model: "anthropic:claude-4-5-sonnet", context: existing_context)
+], model: "anthropic:claude-sonnet-4-5", context: existing_context)
 ```
 
 ## Explicit Agents
@@ -181,7 +181,7 @@ You can also combine messages with an existing context - messages are appended:
 For more control, create an agent explicitly:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
   system_prompt: "You are a helpful assistant.",
   temperature: 0.7,
   max_tokens: 1000
@@ -218,7 +218,7 @@ defmodule MyApp.LoggingHooks do
 end
 
 # Use hooks
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
   hooks: MyApp.LoggingHooks
 )
 ```
@@ -235,13 +235,13 @@ Hooks can:
 Pass API keys at runtime for multi-tenant applications:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
 ```
 
 ## Telemetry
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
   hooks: Strider.Telemetry.Hooks
 )
 ```

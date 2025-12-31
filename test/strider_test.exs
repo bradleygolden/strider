@@ -311,9 +311,9 @@ defmodule StriderTest do
 
   describe "Agent.new/1 API styles" do
     test "tuple as first argument" do
-      agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet"})
+      agent = Agent.new({:req_llm, "anthropic:claude-sonnet-4-5"})
 
-      assert agent.backend == {:req_llm, %{model: "anthropic:claude-4-5-sonnet"}}
+      assert agent.backend == {:req_llm, %{model: "anthropic:claude-sonnet-4-5"}}
       assert agent.system_prompt == nil
     end
 
@@ -341,10 +341,10 @@ defmodule StriderTest do
     end
 
     test "three-element tuple with backend options (BYOK)" do
-      agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet", api_key: "sk-test"})
+      agent = Agent.new({:req_llm, "anthropic:claude-sonnet-4-5", api_key: "sk-test"})
 
       assert agent.backend ==
-               {:req_llm, %{model: "anthropic:claude-4-5-sonnet", api_key: "sk-test"}}
+               {:req_llm, %{model: "anthropic:claude-sonnet-4-5", api_key: "sk-test"}}
     end
 
     test "mock backend with keyword config" do

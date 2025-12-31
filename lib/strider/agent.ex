@@ -16,28 +16,28 @@ defmodule Strider.Agent do
   There are two equivalent ways to create an agent:
 
       # Style 1: Tuple as first argument (clean)
-      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"})
+      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"})
 
-      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
         system_prompt: "You are helpful."
       )
 
       # Style 2: Pure keyword config (explicit)
       Strider.Agent.new(
-        backend: {Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+        backend: {Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
         system_prompt: "You are helpful."
       )
 
   ## Backend Examples
 
       # Strider.Backends.ReqLLM with different providers (requires :req_llm dep)
-      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"})
+      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"})
       Strider.Agent.new({Strider.Backends.ReqLLM, "openai:gpt-4"})
-      Strider.Agent.new({Strider.Backends.ReqLLM, "openrouter:anthropic/claude-4-5-sonnet"})
-      Strider.Agent.new({Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-4-5-sonnet-20241022-v2:0"})
+      Strider.Agent.new({Strider.Backends.ReqLLM, "openrouter:anthropic/claude-sonnet-4-5"})
+      Strider.Agent.new({Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"})
 
       # With BYOK (Bring Your Own Key)
-      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
+      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
 
       # Mock backend for testing
       Strider.Agent.new({:mock, response: "Hello!"})
@@ -59,12 +59,12 @@ defmodule Strider.Agent do
 
   Hooks allow observability and custom processing at each stage of execution:
 
-      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
         hooks: MyApp.LLMHooks
       )
 
       # Multiple hooks (all get called in order)
-      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
         hooks: [Strider.Telemetry.Hooks, MyApp.LoggingHooks]
       )
 
