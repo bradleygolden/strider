@@ -20,7 +20,7 @@ Agents are loops. A loop that calls an LLM, gets a response, and decides what to
 
 ## What Strider Doesn't Do
 
-Tool calling isn't built in. You decide how to parse responses and when to stop.
+Tool execution isn't built in. Strider parses tool calls from LLM responses (via `response.tool_calls` and `finish_reason: :tool_use`), but you decide how to execute them and when to stop the loop.
 
 ## Installation
 
