@@ -97,6 +97,25 @@ defmodule Strider.Hooks do
         end
       end
 
+  ## Execution Order
+
+  When multiple hooks are configured, they execute in order. Each transforming
+  hook receives the output of the previous hook, enabling composition:
+
+      # Hooks execute left to right: PrefixHooks first, then SuffixHooks
+      hooks: [PrefixHooks, SuffixHooks]
+      # "hello" -> "[prefix] hello" -> "[prefix] hello [suffix]"
+
+  When combining agent-level and per-call hooks, agent hooks run first:
+
+      agent = Strider.Agent.new({:mock, response: "Hi"},
+        hooks: AgentHooks    # Runs first
+      )
+
+      Strider.call(agent, "Hello", context,
+        hooks: CallHooks     # Runs second
+      )
+
   ## Usage
 
       # Per-call hooks
@@ -172,8 +191,10 @@ defmodule Strider.Hooks do
   def invoke(nil, _callback, _args, value), do: {:cont, value}
 
   def invoke(hooks, callback, args, initial_value) when is_list(hooks) do
-    Enum.reduce_while(hooks, {:cont, initial_value}, fn hook, {:cont, _value} ->
-      case invoke_one(hook, callback, args, initial_value) do
+    Enum.reduce_while(hooks, {:cont, initial_value}, fn hook, {:cont, current_value} ->
+      updated_args = List.replace_at(args, 1, current_value)
+
+      case invoke_one(hook, callback, updated_args, current_value) do
         {:cont, new_value} -> {:cont, {:cont, new_value}}
         {:halt, response} -> {:halt, {:halt, response}}
         {:error, reason} -> {:halt, {:error, reason}}
