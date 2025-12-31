@@ -39,6 +39,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   alias Strider.Sandbox.ExecResult
   alias Strider.Sandbox.FileOps
+  alias Strider.Sandbox.NetworkEnv
 
   @default_image "ghcr.io/bradleygolden/strider-sandbox"
   @default_workdir "/workspace"
@@ -187,24 +188,10 @@ defmodule Strider.Sandbox.Adapters.Docker do
   end
 
   defp add_network_env(args, config) do
-    case Map.get(config, :proxy) do
-      nil ->
-        args ++ ["-e", "STRIDER_NETWORK_MODE=none"]
-
-      proxy_opts when is_list(proxy_opts) ->
-        ip = Keyword.fetch!(proxy_opts, :ip)
-        port = Keyword.get(proxy_opts, :port, 4000)
-
-        args ++
-          [
-            "-e",
-            "STRIDER_NETWORK_MODE=proxy_only",
-            "-e",
-            "STRIDER_PROXY_IP=#{ip}",
-            "-e",
-            "STRIDER_PROXY_PORT=#{port}"
-          ]
-    end
+    config
+    |> Map.get(:proxy)
+    |> NetworkEnv.build()
+    |> Enum.reduce(args, fn {k, v}, acc -> acc ++ ["-e", "#{k}=#{v}"] end)
   end
 
   defp add_image_and_command(args, config, image) do

@@ -76,12 +76,12 @@ if Code.ensure_loaded?(Req) do
     alias Strider.Sandbox.ExecResult
     alias Strider.Sandbox.FileOps
     alias Strider.Sandbox.HealthPoller
+    alias Strider.Sandbox.NetworkEnv
 
     @default_image "ghcr.io/bradleygolden/strider-sandbox"
     @default_memory_mb 256
     @default_cpus 1
     @default_cpu_kind "shared"
-    @default_proxy_port 4000
     @default_health_port 4001
     @default_health_interval 2_000
     @default_timeout_ms 60_000
@@ -569,19 +569,10 @@ if Code.ensure_loaded?(Req) do
     end
 
     defp add_network_env(env, config) do
-      case Map.get(config, :proxy) do
-        nil ->
-          Map.put(env, "STRIDER_NETWORK_MODE", "none")
-
-        proxy_opts when is_list(proxy_opts) ->
-          ip = Keyword.fetch!(proxy_opts, :ip)
-          port = Keyword.get(proxy_opts, :port, @default_proxy_port)
-
-          env
-          |> Map.put("STRIDER_NETWORK_MODE", "proxy_only")
-          |> Map.put("STRIDER_PROXY_IP", to_string(ip))
-          |> Map.put("STRIDER_PROXY_PORT", to_string(port))
-      end
+      config
+      |> Map.get(:proxy)
+      |> NetworkEnv.build()
+      |> Map.merge(env)
     end
 
     defp build_services([]), do: []
