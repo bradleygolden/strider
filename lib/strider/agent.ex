@@ -203,12 +203,24 @@ defmodule Strider.Agent do
   @doc """
   Updates the agent's configuration.
 
+  Use this to modify agent settings dynamically, such as adjusting temperature
+  based on task complexity or changing max_tokens for different response lengths.
+
+  Configuration set here is merged with backend config when making calls.
+
   ## Examples
 
       iex> agent = Strider.Agent.new({:mock, response: "Hello"})
       iex> agent = Strider.Agent.put_config(agent, :temperature, 0.5)
       iex> agent.config
       %{temperature: 0.5}
+
+      # Adjust settings based on task
+      agent = if complex_task? do
+        Agent.put_config(agent, :temperature, 0.2)
+      else
+        Agent.put_config(agent, :temperature, 0.8)
+      end
 
   """
   @spec put_config(t(), atom(), term()) :: t()
@@ -218,6 +230,9 @@ defmodule Strider.Agent do
 
   @doc """
   Gets a configuration value from the agent.
+
+  This retrieves values from the agent's config map, which includes
+  options like temperature, max_tokens, and top_p passed during creation.
 
   ## Examples
 
