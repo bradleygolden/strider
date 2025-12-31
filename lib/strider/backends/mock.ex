@@ -72,10 +72,10 @@ defmodule Strider.Backends.Mock do
   end
 
   @impl true
-  def introspect do
+  def introspect(config) do
     %{
       provider: "mock",
-      model: "mock",
+      model: Map.get(config, :model, "mock"),
       operation: :chat,
       capabilities: [:streaming, :deterministic]
     }

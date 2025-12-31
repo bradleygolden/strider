@@ -131,12 +131,13 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     @impl true
-    def introspect do
-      # Note: This returns static info. For dynamic provider/model,
-      # use the metadata in Response which has the actual values used.
+    def introspect(config) do
+      model = Map.get(config, :model, "unknown")
+      {provider, _model_name} = parse_model_string(model)
+
       %{
-        provider: "req_llm",
-        model: "dynamic",
+        provider: provider,
+        model: model,
         operation: :chat,
         capabilities: [:streaming, :multi_provider]
       }
