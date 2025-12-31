@@ -27,7 +27,7 @@ Tool execution isn't built in. Strider parses tool calls from LLM responses (via
 ```elixir
 def deps do
   [
-    {:strider, github: "bradleygolden/strider"},
+    {:strider, github: "bradleygolden/strider", ref: "663c2d7"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy.Sandbox
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
