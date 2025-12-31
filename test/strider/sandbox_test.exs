@@ -18,8 +18,8 @@ defmodule Strider.SandboxTest do
       assert %Instance{} = sandbox
       assert sandbox.adapter == TestAdapter
       assert sandbox.config == %{image: "test:latest"}
-      assert sandbox.status == :running
       assert is_integer(sandbox.created_at)
+      assert Sandbox.status(sandbox) == :running
     end
 
     test "accepts keyword list config" do

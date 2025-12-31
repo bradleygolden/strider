@@ -11,23 +11,23 @@ if Code.ensure_loaded?(ReqLLM) do
     The model must include the provider in `"provider:model"` format:
 
         # Direct API access
-        model: "anthropic:claude-4-5-sonnet"
+        model: "anthropic:claude-sonnet-4-5"
         model: "openai:gpt-4"
         model: "google:gemini-1.5-pro"
 
         # Via OpenRouter (access many models through one API)
-        model: "openrouter:anthropic/claude-4-5-sonnet"
+        model: "openrouter:anthropic/claude-sonnet-4-5"
         model: "openrouter:openai/gpt-4"
 
         # Via Amazon Bedrock
-        model: "amazon_bedrock:anthropic.claude-4-5-sonnet-20241022-v2:0"
+        model: "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"
 
         # Via Google Vertex AI
-        model: "google_vertex:claude-4-5-sonnet@20240620"
+        model: "google_vertex:claude-sonnet-4-5@20240620"
 
     ## Configuration
 
-    Additional options can be passed via the `:config` map:
+    Additional options can be passed as keyword arguments:
 
     - `:temperature` - Sampling temperature (0.0 to 2.0)
     - `:max_tokens` - Maximum tokens in response
@@ -38,18 +38,19 @@ if Code.ensure_loaded?(ReqLLM) do
 
         # Using Anthropic directly
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
-          config: %{temperature: 0.7, max_tokens: 1000}
+          {Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
+          temperature: 0.7,
+          max_tokens: 1000
         )
 
         # Using OpenRouter
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "openrouter:anthropic/claude-4-5-sonnet"}
+          {Strider.Backends.ReqLLM, "openrouter:anthropic/claude-sonnet-4-5"}
         )
 
         # Using Amazon Bedrock
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-4-5-sonnet-20241022-v2:0"}
+          {Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"}
         )
 
     ## Supported Providers
@@ -114,11 +115,10 @@ if Code.ensure_loaded?(ReqLLM) do
       req_messages = Enum.map(messages, &to_req_llm_message/1)
 
       case ReqLLM.stream_text(model, req_messages, options) do
-        {:ok, response} ->
-          # ReqLLM returns a Response with stream field
+        {:ok, stream_response} ->
           text_stream =
-            response
-            |> ReqLLM.Response.text_stream()
+            stream_response
+            |> ReqLLM.StreamResponse.tokens()
             |> Stream.map(fn text ->
               %{content: text, metadata: %{backend: :req_llm}}
             end)
@@ -131,12 +131,13 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     @impl true
-    def introspect do
-      # Note: This returns static info. For dynamic provider/model,
-      # use the metadata in Response which has the actual values used.
+    def introspect(config) do
+      model = Map.get(config, :model, "unknown")
+      {provider, _model_name} = parse_model_string(model)
+
       %{
-        provider: "req_llm",
-        model: "dynamic",
+        provider: provider,
+        model: model,
         operation: :chat,
         capabilities: [:streaming, :multi_provider]
       }
@@ -152,12 +153,14 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     defp normalize_response(response, model) do
-      content = extract_content(response)
+      content = ReqLLM.Response.text(response)
+      tool_calls = extract_tool_calls(response)
       usage = ReqLLM.Response.usage(response) || %{}
       finish_reason = ReqLLM.Response.finish_reason(response)
 
       Response.new(
         content: content,
+        tool_calls: tool_calls,
         finish_reason: normalize_finish_reason(finish_reason),
         usage: normalize_usage(usage),
         metadata: build_metadata(response, model, finish_reason)
@@ -188,14 +191,12 @@ if Code.ensure_loaded?(ReqLLM) do
     defp maybe_parse_struct(_schema, object), do: object
 
     defp build_metadata(response, model, raw_finish_reason) do
-      {provider, model_name} = parse_model_string(model)
+      {provider, _model_name} = parse_model_string(model)
 
       %{
-        # Standardized keys (OpenTelemetry GenAI conventions)
         provider: provider,
-        model: extract_response_model(response) || model_name,
-        response_id: extract_response_id(response),
-        # Legacy/additional keys
+        model: response.model,
+        response_id: response.id,
         raw_finish_reason: raw_finish_reason
       }
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
@@ -209,29 +210,52 @@ if Code.ensure_loaded?(ReqLLM) do
       end
     end
 
-    defp parse_model_string(_model), do: {"unknown", "unknown"}
+    defp extract_tool_calls(response) do
+      response
+      |> ReqLLM.Response.tool_calls()
+      |> Enum.map(&normalize_tool_call/1)
+    end
 
-    defp extract_response_id(%{id: id}) when is_binary(id), do: id
-    defp extract_response_id(_), do: nil
+    defp normalize_tool_call(%ReqLLM.ToolCall{id: id, function: %{name: name, arguments: args}}) do
+      %{
+        id: id,
+        name: name,
+        arguments: decode_arguments(args)
+      }
+    end
 
-    defp extract_response_model(%{model: model}) when is_binary(model), do: model
-    defp extract_response_model(_), do: nil
+    defp normalize_tool_call(%{id: id, name: name, arguments: args}) do
+      %{
+        id: id,
+        name: name,
+        arguments: decode_arguments(args)
+      }
+    end
 
-    # Extract content from ReqLLM response, preserving structure
-    defp extract_content(%{message: nil}), do: nil
-    defp extract_content(%{message: %{content: content}}), do: content
-    defp extract_content(_response), do: nil
+    defp normalize_tool_call(%{name: name, arguments: args}) do
+      %{
+        id: nil,
+        name: name,
+        arguments: decode_arguments(args)
+      }
+    end
 
-    defp normalize_finish_reason("stop"), do: :stop
-    defp normalize_finish_reason("end_turn"), do: :stop
-    defp normalize_finish_reason("tool_use"), do: :tool_use
-    defp normalize_finish_reason("tool_calls"), do: :tool_use
-    defp normalize_finish_reason("max_tokens"), do: :max_tokens
-    defp normalize_finish_reason("length"), do: :max_tokens
-    defp normalize_finish_reason("content_filter"), do: :content_filter
+    defp decode_arguments(args) when is_binary(args) do
+      case Jason.decode(args) do
+        {:ok, map} -> map
+        {:error, _} -> %{}
+      end
+    end
+
+    defp decode_arguments(args) when is_map(args), do: args
+    defp decode_arguments(_), do: %{}
+
+    defp normalize_finish_reason(:stop), do: :stop
+    defp normalize_finish_reason(:length), do: :max_tokens
+    defp normalize_finish_reason(:tool_calls), do: :tool_use
+    defp normalize_finish_reason(:content_filter), do: :content_filter
+    defp normalize_finish_reason(:error), do: :error
     defp normalize_finish_reason(nil), do: nil
-    defp normalize_finish_reason(other) when is_atom(other), do: other
-    defp normalize_finish_reason(other) when is_binary(other), do: String.to_atom(other)
 
     defp normalize_usage(usage) when is_map(usage) do
       %{

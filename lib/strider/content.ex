@@ -35,7 +35,7 @@ defmodule Strider.Content do
       {:ok, response, _ctx} = Strider.call([
         Content.text("Analyze this image"),
         Content.image_url("https://example.com/chart.png")
-      ], model: "anthropic:claude-4-5-sonnet")
+      ], model: "anthropic:claude-sonnet-4-5")
 
       # Multi-modal with roles
       messages = [
@@ -229,8 +229,15 @@ defmodule Strider.Content do
   @doc """
   Wraps content into a list of Content.Part structs.
 
-  Handles the string convenience case at API entry points.
-  Strings are automatically wrapped as text parts.
+  Handles convenience cases at API entry points:
+  - Strings are wrapped as text parts
+  - Part structs are wrapped in a list
+  - Lists of parts pass through unchanged
+  - Maps are JSON-encoded into text parts
+
+  Maps are JSON-encoded to support tool results and structured data
+  in multi-turn conversations. When a tool returns structured data
+  like `%{result: 42}`, this is serialized so the LLM can read it.
 
   ## Examples
 
@@ -242,6 +249,10 @@ defmodule Strider.Content do
 
       Content.wrap([Content.text("Hi"), Content.image_url("...")])
       #=> [%Part{...}, %Part{...}]
+
+      # Maps are JSON-encoded (for tool results, structured data)
+      Content.wrap(%{result: 42, status: "success"})
+      #=> [%Part{type: :text, text: "{\"result\":42,\"status\":\"success\"}"}]
 
   """
   @spec wrap(String.t() | Part.t() | [Part.t()] | map()) :: [Part.t()]

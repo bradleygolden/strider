@@ -101,6 +101,14 @@ if Code.ensure_loaded?(Solid) do
       end
     end
 
+    @impl true
+    def eval!(template, context) when is_binary(template) do
+      case eval(template, context) do
+        {:ok, rendered} -> rendered
+        {:error, errors} -> raise ArgumentError, "Failed to eval template: #{inspect(errors)}"
+      end
+    end
+
     defp normalize_context(context) when is_map(context) do
       Map.new(context, fn {k, v} -> {to_string(k), v} end)
     end

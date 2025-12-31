@@ -52,6 +52,9 @@ defmodule Strider.Hooks do
 
   ## Example - Caching (transforming with halt)
 
+  Response caching requires correlating the request messages with the response.
+  Use an ETS table or cache server that can look up by message hash:
+
       defmodule MyApp.CachingHooks do
         @behaviour Strider.Hooks
 
@@ -59,18 +62,22 @@ defmodule Strider.Hooks do
         def on_backend_request(_config, messages) do
           cache_key = :erlang.phash2(messages)
           case MyApp.Cache.get(cache_key) do
-            {:ok, cached} -> {:halt, cached}  # Skip LLM
-            :miss ->
-              Process.put(:cache_key, cache_key)
-              {:cont, messages}
+            {:ok, cached} -> {:halt, cached}  # Skip LLM, return cached response
+            :miss -> {:cont, messages}
           end
         end
+      end
+
+  For write-through caching, use `on_call_end` which has access to the context
+  containing the original messages:
+
+      defmodule MyApp.WriteThroughCache do
+        @behaviour Strider.Hooks
 
         @impl true
-        def on_backend_response(_config, response) do
-          if key = Process.get(:cache_key) do
-            MyApp.Cache.put(key, response)
-          end
+        def on_call_end(_agent, response, context) do
+          cache_key = :erlang.phash2(context.messages)
+          MyApp.Cache.put(cache_key, response)
           {:cont, response}
         end
       end
@@ -90,6 +97,25 @@ defmodule Strider.Hooks do
         end
       end
 
+  ## Execution Order
+
+  When multiple hooks are configured, they execute in order. Each transforming
+  hook receives the output of the previous hook, enabling composition:
+
+      # Hooks execute left to right: PrefixHooks first, then SuffixHooks
+      hooks: [PrefixHooks, SuffixHooks]
+      # "hello" -> "[prefix] hello" -> "[prefix] hello [suffix]"
+
+  When combining agent-level and per-call hooks, agent hooks run first:
+
+      agent = Strider.Agent.new({:mock, response: "Hi"},
+        hooks: AgentHooks    # Runs first
+      )
+
+      Strider.call(agent, "Hello", context,
+        hooks: CallHooks     # Runs second
+      )
+
   ## Usage
 
       # Per-call hooks
@@ -103,7 +129,7 @@ defmodule Strider.Hooks do
       )
 
       # Agent-level hooks (used for all calls with this agent)
-      agent = Strider.Agent.new({StriderReqLLM, "anthropic:claude-4-5-sonnet"},
+      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
         hooks: MyApp.LoggingHooks
       )
 
@@ -165,8 +191,10 @@ defmodule Strider.Hooks do
   def invoke(nil, _callback, _args, value), do: {:cont, value}
 
   def invoke(hooks, callback, args, initial_value) when is_list(hooks) do
-    Enum.reduce_while(hooks, {:cont, initial_value}, fn hook, {:cont, _value} ->
-      case invoke_one(hook, callback, args, initial_value) do
+    Enum.reduce_while(hooks, {:cont, initial_value}, fn hook, {:cont, current_value} ->
+      updated_args = List.replace_at(args, 1, current_value)
+
+      case invoke_one(hook, callback, updated_args, current_value) do
         {:cont, new_value} -> {:cont, {:cont, new_value}}
         {:halt, response} -> {:halt, {:halt, response}}
         {:error, reason} -> {:halt, {:error, reason}}

@@ -70,23 +70,6 @@ defmodule Strider.Context do
   end
 
   @doc """
-  Adds a pre-built message struct to the context.
-
-  ## Examples
-
-      iex> context = Strider.Context.new()
-      iex> message = Strider.Message.new(:user, "Hello!")
-      iex> context = Strider.Context.append_message(context, message)
-      iex> length(context.messages)
-      1
-
-  """
-  @spec append_message(t(), Message.t()) :: t()
-  def append_message(%__MODULE__{} = context, %Message{} = message) do
-    %{context | messages: context.messages ++ [message]}
-  end
-
-  @doc """
   Returns the messages in the context.
 
   ## Examples
@@ -159,5 +142,24 @@ defmodule Strider.Context do
   @spec get_metadata(t(), atom(), term()) :: term()
   def get_metadata(%__MODULE__{metadata: metadata}, key, default \\ nil) do
     Map.get(metadata, key, default)
+  end
+
+  @doc """
+  Clears all messages from the context, preserving metadata.
+
+  Useful for starting a fresh conversation while keeping session information.
+
+  ## Examples
+
+      iex> context = Strider.Context.new(metadata: %{session_id: "abc123"})
+      iex> context = Strider.Context.add_message(context, :user, "Hello!")
+      iex> context = Strider.Context.clear(context)
+      iex> {context.messages, context.metadata}
+      {[], %{session_id: "abc123"}}
+
+  """
+  @spec clear(t()) :: t()
+  def clear(%__MODULE__{} = context) do
+    %{context | messages: []}
   end
 end

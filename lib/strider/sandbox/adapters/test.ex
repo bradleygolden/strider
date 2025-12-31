@@ -65,14 +65,6 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @doc """
-  Resets all adapter state.
-  """
-  @spec reset() :: :ok
-  def reset do
-    Agent.update(__MODULE__, fn _ -> %{sandboxes: %{}, responses: %{}} end)
-  end
-
-  @doc """
   Gets the config for a sandbox.
   """
   @spec get_config(String.t()) :: map() | nil
@@ -109,7 +101,7 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
-  def terminate(sandbox_id) do
+  def terminate(sandbox_id, _opts \\ []) do
     Agent.update(__MODULE__, fn state ->
       put_in(state, [:sandboxes, sandbox_id, :status], :terminated)
     end)
@@ -118,7 +110,7 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
-  def status(sandbox_id) do
+  def status(sandbox_id, _opts \\ []) do
     Agent.get(__MODULE__, fn state ->
       get_in(state, [:sandboxes, sandbox_id, :status]) || :unknown
     end)
@@ -149,6 +141,15 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   @impl true
+  def write_files(sandbox_id, files, _opts) do
+    Agent.update(__MODULE__, fn state ->
+      update_in(state, [:sandboxes, sandbox_id, :files], fn existing ->
+        Map.merge(existing || %{}, Map.new(files))
+      end)
+    end)
+  end
+
+  @impl true
   def await_ready(sandbox_id, _metadata, _opts) do
     {:ok,
      %{
@@ -160,40 +161,47 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def stop(sandbox_id, _opts \\ []) do
-    Agent.update(__MODULE__, fn state ->
-      if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id, :status], :stopped)
-      else
-        state
-      end
-    end)
-
-    {:ok, %{}}
+    case update_sandbox(sandbox_id, [:status], :stopped) do
+      :ok -> {:ok, %{}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @impl true
   def start(sandbox_id, _opts \\ []) do
-    Agent.update(__MODULE__, fn state ->
-      if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id, :status], :running)
-      else
-        state
-      end
-    end)
-
-    {:ok, %{}}
+    case update_sandbox(sandbox_id, [:status], :running) do
+      :ok -> {:ok, %{}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @impl true
   def update(sandbox_id, config, _opts \\ []) do
-    Agent.update(__MODULE__, fn state ->
-      if get_in(state, [:sandboxes, sandbox_id]) do
-        put_in(state, [:sandboxes, sandbox_id, :config], config)
-      else
-        state
-      end
-    end)
+    case update_sandbox(sandbox_id, [:config], config) do
+      :ok -> {:ok, %{}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-    {:ok, %{}}
+  defp update_sandbox(sandbox_id, path, value) do
+    case Process.whereis(__MODULE__) do
+      nil ->
+        {:error, :agent_not_running}
+
+      _pid ->
+        try do
+          Agent.update(__MODULE__, &update_sandbox_state(&1, sandbox_id, path, value))
+        catch
+          :exit, _ -> {:error, :agent_not_running}
+        end
+    end
+  end
+
+  defp update_sandbox_state(state, sandbox_id, path, value) do
+    if get_in(state, [:sandboxes, sandbox_id]) do
+      put_in(state, [:sandboxes, sandbox_id | path], value)
+    else
+      state
+    end
   end
 end

@@ -25,6 +25,7 @@ defmodule Strider.Sandbox do
   Strider.Sandbox uses an adapter pattern for different backends:
 
   - `Strider.Sandbox.Adapters.Docker` - Docker containers (local development)
+  - `Strider.Sandbox.Adapters.Fly` - Fly.io Machines (production)
   - `Strider.Sandbox.Adapters.Test` - In-memory testing adapter
 
   Custom adapters can be created by implementing the `Strider.Sandbox.Adapter` behaviour.
@@ -58,20 +59,16 @@ defmodule Strider.Sandbox do
   def create({adapter_module, config}) when is_atom(adapter_module) do
     config_map = normalize_config(config)
 
-    case adapter_module.create(config_map) do
-      {:ok, sandbox_id, metadata} ->
-        sandbox =
-          Instance.new(%{
-            id: sandbox_id,
-            adapter: adapter_module,
-            config: config_map,
-            metadata: metadata
-          })
+    with {:ok, sandbox_id, metadata} <- adapter_module.create(config_map) do
+      sandbox =
+        Instance.new(
+          id: sandbox_id,
+          adapter: adapter_module,
+          config: config_map,
+          metadata: metadata
+        )
 
-        {:ok, sandbox}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, sandbox}
     end
   end
 
@@ -88,12 +85,12 @@ defmodule Strider.Sandbox do
   """
   @spec from_id(module(), String.t(), map(), map()) :: Instance.t()
   def from_id(adapter_module, sandbox_id, config \\ %{}, metadata \\ %{}) do
-    Instance.new(%{
+    Instance.new(
       id: sandbox_id,
       adapter: adapter_module,
       config: config,
       metadata: metadata
-    })
+    )
   end
 
   @doc """
@@ -119,7 +116,7 @@ defmodule Strider.Sandbox do
   @spec exec(Instance.t(), String.t(), keyword()) ::
           {:ok, Strider.Sandbox.ExecResult.t()} | {:error, term()}
   def exec(%Instance{} = sandbox, command, opts \\ []) do
-    sandbox.adapter.exec(sandbox.id, command, opts)
+    sandbox.adapter.exec(sandbox.id, command, merge_opts(sandbox.config, opts))
   end
 
   @doc """
@@ -131,7 +128,7 @@ defmodule Strider.Sandbox do
   """
   @spec terminate(Instance.t()) :: :ok | {:error, term()}
   def terminate(%Instance{} = sandbox) do
-    sandbox.adapter.terminate(sandbox.id)
+    sandbox.adapter.terminate(sandbox.id, merge_opts(sandbox.config, []))
   end
 
   @doc """
@@ -143,7 +140,7 @@ defmodule Strider.Sandbox do
   """
   @spec status(Instance.t()) :: :running | :stopped | :terminated | :unknown
   def status(%Instance{} = sandbox) do
-    sandbox.adapter.status(sandbox.id)
+    sandbox.adapter.status(sandbox.id, merge_opts(sandbox.config, []))
   end
 
   @doc """
@@ -158,14 +155,9 @@ defmodule Strider.Sandbox do
       # => "http://strider-sandbox-abc123:4000"
   """
   @spec get_url(Instance.t(), integer()) :: {:ok, String.t()} | {:error, term()}
-  def get_url(%Instance{metadata: metadata} = sandbox, port) do
+  def get_url(%Instance{metadata: metadata, adapter: adapter, id: id}, port) do
     resolved_port = get_in(metadata, [:port_map, port]) || port
-
-    if function_exported?(sandbox.adapter, :get_url, 2) do
-      sandbox.adapter.get_url(sandbox.id, resolved_port)
-    else
-      {:error, :not_implemented}
-    end
+    call_optional(adapter, :get_url, [id, resolved_port])
   end
 
   @doc """
@@ -176,12 +168,8 @@ defmodule Strider.Sandbox do
       {:ok, content} = Strider.Sandbox.read_file(sandbox, "/app/code.py")
   """
   @spec read_file(Instance.t(), String.t(), keyword()) :: {:ok, binary()} | {:error, term()}
-  def read_file(%Instance{} = sandbox, path, opts \\ []) do
-    if function_exported?(sandbox.adapter, :read_file, 3) do
-      sandbox.adapter.read_file(sandbox.id, path, opts)
-    else
-      {:error, :not_implemented}
-    end
+  def read_file(%Instance{adapter: adapter, id: id, config: config}, path, opts \\ []) do
+    call_optional(adapter, :read_file, [id, path, merge_opts(config, opts)])
   end
 
   @doc """
@@ -192,12 +180,8 @@ defmodule Strider.Sandbox do
       :ok = Strider.Sandbox.write_file(sandbox, "/app/code.py", "print('hello')")
   """
   @spec write_file(Instance.t(), String.t(), binary(), keyword()) :: :ok | {:error, term()}
-  def write_file(%Instance{} = sandbox, path, content, opts \\ []) do
-    if function_exported?(sandbox.adapter, :write_file, 4) do
-      sandbox.adapter.write_file(sandbox.id, path, content, opts)
-    else
-      {:error, :not_implemented}
-    end
+  def write_file(%Instance{adapter: adapter, id: id, config: config}, path, content, opts \\ []) do
+    call_optional(adapter, :write_file, [id, path, content, merge_opts(config, opts)])
   end
 
   @doc """
@@ -211,12 +195,16 @@ defmodule Strider.Sandbox do
       ])
   """
   @spec write_files(Instance.t(), [{String.t(), binary()}], keyword()) :: :ok | {:error, term()}
-  def write_files(%Instance{} = sandbox, files, opts \\ []) do
-    if function_exported?(sandbox.adapter, :write_files, 3) do
-      sandbox.adapter.write_files(sandbox.id, files, opts)
-    else
-      write_files_sequentially(sandbox, files, opts)
-    end
+  def write_files(
+        %Instance{adapter: adapter, id: id, config: config} = sandbox,
+        files,
+        opts \\ []
+      ) do
+    merged_opts = merge_opts(config, opts)
+
+    call_optional(adapter, :write_files, [id, files, merged_opts], fn ->
+      write_files_sequentially(sandbox, files, merged_opts)
+    end)
   end
 
   defp write_files_sequentially(sandbox, files, opts) do
@@ -246,12 +234,15 @@ defmodule Strider.Sandbox do
       {:ok, metadata} = Strider.Sandbox.await_ready(sandbox, timeout: 30_000)
   """
   @spec await_ready(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
-  def await_ready(%Instance{adapter: adapter} = sandbox, opts \\ []) do
-    if function_exported?(adapter, :await_ready, 3) do
-      adapter.await_ready(sandbox.id, sandbox.metadata, opts)
-    else
-      poll_health_endpoint(sandbox, opts)
-    end
+  def await_ready(
+        %Instance{adapter: adapter, id: id, config: config, metadata: metadata} = sandbox,
+        opts \\ []
+      ) do
+    merged_opts = merge_opts(config, opts)
+
+    call_optional(adapter, :await_ready, [id, metadata, merged_opts], fn ->
+      poll_health_endpoint(sandbox, merged_opts)
+    end)
   end
 
   @doc """
@@ -265,12 +256,8 @@ defmodule Strider.Sandbox do
       {:ok, _} = Strider.Sandbox.stop(sandbox)
   """
   @spec stop(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
-  def stop(%Instance{adapter: adapter} = sandbox, opts \\ []) do
-    if function_exported?(adapter, :stop, 2) do
-      adapter.stop(sandbox.id, opts)
-    else
-      {:error, :not_implemented}
-    end
+  def stop(%Instance{adapter: adapter, id: id, config: config}, opts \\ []) do
+    call_optional(adapter, :stop, [id, merge_opts(config, opts)])
   end
 
   @doc """
@@ -283,12 +270,8 @@ defmodule Strider.Sandbox do
       {:ok, _} = Strider.Sandbox.start(sandbox)
   """
   @spec start(Instance.t(), keyword()) :: {:ok, map()} | {:error, term()}
-  def start(%Instance{adapter: adapter} = sandbox, opts \\ []) do
-    if function_exported?(adapter, :start, 2) do
-      adapter.start(sandbox.id, opts)
-    else
-      {:error, :not_implemented}
-    end
+  def start(%Instance{adapter: adapter, id: id, config: config}, opts \\ []) do
+    call_optional(adapter, :start, [id, merge_opts(config, opts)])
   end
 
   @doc """
@@ -302,12 +285,8 @@ defmodule Strider.Sandbox do
       {:ok, _} = Strider.Sandbox.update(sandbox, %{image: "node:23-slim"})
   """
   @spec update(Instance.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
-  def update(%Instance{adapter: adapter} = sandbox, config, opts \\ []) do
-    if function_exported?(adapter, :update, 3) do
-      adapter.update(sandbox.id, config, opts)
-    else
-      {:error, :not_implemented}
-    end
+  def update(%Instance{adapter: adapter, id: id, config: sandbox_config}, config, opts \\ []) do
+    call_optional(adapter, :update, [id, config, merge_opts(sandbox_config, opts)])
   end
 
   defp poll_health_endpoint(sandbox, opts) do
@@ -329,17 +308,39 @@ defmodule Strider.Sandbox do
 
   - `:port` - The port the sandbox server is listening on (default: 4001)
   - `:timeout` - Request timeout in milliseconds (default: 60_000)
+  - `:options` - Custom options passed to the sandbox server (default: %{})
+
+  ## Event Format
+
+  The stream yields maps with a `"type"` key indicating the event type:
+
+      %{"type" => "text", "text" => "Hello!"}
+      %{"type" => "tool_call", "name" => "run_code", "arguments" => %{...}}
+      %{"type" => "tool_result", "content" => "..."}
+      %{"type" => "error", "message" => "..."}
 
   ## Examples
 
       {:ok, stream} = Strider.Sandbox.prompt(sandbox, "Hello")
-      Enum.each(stream, fn event -> IO.inspect(event) end)
+      Enum.each(stream, fn event ->
+        case event do
+          %{"type" => "text", "text" => text} -> IO.write(text)
+          %{"type" => "error", "message" => msg} -> IO.puts("Error: \#{msg}")
+          _ -> :ok
+        end
+      end)
 
       # With content blocks for images/files
       {:ok, stream} = Strider.Sandbox.prompt(sandbox, [
         %{type: "text", text: "What's in this image?"},
         %{type: "file", media_type: "image/png", data: Base.encode64(bytes)}
       ])
+
+      # Accumulate full response
+      {:ok, stream} = Strider.Sandbox.prompt(sandbox, "Write a poem")
+      text = stream
+        |> Enum.filter(&match?(%{"type" => "text"}, &1))
+        |> Enum.map_join(&Map.get(&1, "text"))
   """
   @spec prompt(Instance.t(), prompt_content(), keyword()) ::
           {:ok, Enumerable.t()} | {:error, term()}
@@ -352,70 +353,22 @@ defmodule Strider.Sandbox do
       custom_opts = Keyword.get(opts, :options, %{})
       body = Jason.encode!(%{prompt: content, options: custom_opts})
 
-      stream =
-        Stream.resource(
-          fn -> start_prompt_request(url, body, timeout) end,
-          &receive_prompt_chunks/1,
-          &cleanup_prompt_request/1
-        )
-        |> NDJSON.stream()
+      case Req.post(url,
+             body: body,
+             headers: [{"content-type", "application/json"}],
+             into: :self,
+             receive_timeout: timeout
+           ) do
+        {:ok, %{status: status, body: async_body}} when status in 200..299 ->
+          stream = async_body |> NDJSON.stream()
+          {:ok, stream}
 
-      {:ok, stream}
-    end
-  end
+        {:ok, %{status: status, body: body}} ->
+          {:error, {:http_error, status, body}}
 
-  defp start_prompt_request(url, body, timeout) do
-    caller = self()
-    ref = make_ref()
-
-    pid =
-      spawn_link(fn ->
-        try do
-          Req.post!(url,
-            body: body,
-            headers: [{"content-type", "application/json"}],
-            into: fn {:data, data}, acc ->
-              send(caller, {ref, {:data, data}})
-              {:cont, acc}
-            end,
-            receive_timeout: timeout
-          )
-
-          send(caller, {ref, :done})
-        rescue
-          e -> send(caller, {ref, {:error, Exception.message(e)}})
-        end
-      end)
-
-    {ref, pid, timeout}
-  end
-
-  defp receive_prompt_chunks({ref, pid, timeout} = state) do
-    receive do
-      {^ref, {:data, data}} ->
-        {[data], state}
-
-      {^ref, :done} ->
-        {:halt, state}
-
-      {^ref, {:error, reason}} ->
-        raise "Prompt request failed: #{reason}"
-
-      {:EXIT, ^pid, reason} ->
-        raise "Prompt request process died: #{inspect(reason)}"
-    after
-      timeout ->
-        raise "Prompt request timed out"
-    end
-  end
-
-  defp cleanup_prompt_request({_ref, pid, _timeout}) do
-    Process.exit(pid, :kill)
-
-    receive do
-      {:EXIT, ^pid, _} -> :ok
-    after
-      100 -> :ok
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
   end
 
@@ -428,4 +381,19 @@ defmodule Strider.Sandbox do
 
   defp normalize_config(config) when is_map(config), do: config
   defp normalize_config(config) when is_list(config), do: Map.new(config)
+
+  defp config_to_opts(config) when is_map(config), do: Keyword.new(config)
+  defp config_to_opts(config) when is_list(config), do: config
+
+  defp merge_opts(config, opts) do
+    Keyword.merge(config_to_opts(config), opts)
+  end
+
+  defp call_optional(adapter, callback, args, fallback \\ fn -> {:error, :not_implemented} end) do
+    if function_exported?(adapter, callback, length(args)) do
+      apply(adapter, callback, args)
+    else
+      fallback.()
+    end
+  end
 end

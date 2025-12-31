@@ -1,6 +1,6 @@
 # Strider
 
-An agent framework for Elixir.
+An AI agent framework for Elixir.
 
 ## Why?
 
@@ -20,14 +20,14 @@ Agents are loops. A loop that calls an LLM, gets a response, and decides what to
 
 ## What Strider Doesn't Do
 
-Tool calling isn't built in. You decide how to parse responses and when to stop.
+Tool execution isn't built in. Strider parses tool calls from LLM responses (via `response.tool_calls` and `finish_reason: :tool_use`), but you decide how to execute them and when to stop the loop.
 
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:strider, git: "https://github.com/bradleygolden/strider.git", ref: "c2667e1"},
+    {:strider, github: "bradleygolden/strider"},
     {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
     {:plug, "~> 1.15"},      # optional, for Strider.Proxy.Sandbox
     {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
@@ -44,7 +44,7 @@ end
 The simplest way to call an LLM - just pass your prompt and model:
 
 ```elixir
-{:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
+{:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-sonnet-4-5")
 
 IO.puts(response.content)
 # => "Hello! How can I help you today?"
@@ -54,7 +54,7 @@ Add a system prompt:
 
 ```elixir
 {:ok, response, _ctx} = Strider.call("Translate: Hello",
-  model: "anthropic:claude-4-5-sonnet",
+  model: "anthropic:claude-sonnet-4-5",
   system_prompt: "You are a translator. Translate to Spanish."
 )
 # => "Hola"
@@ -63,7 +63,7 @@ Add a system prompt:
 Stream responses:
 
 ```elixir
-{:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-4-5-sonnet")
+{:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-sonnet-4-5")
 
 Enum.each(stream, fn chunk ->
   IO.write(chunk.content)
@@ -116,21 +116,21 @@ alias Strider.Content
 {:ok, response, _ctx} = Strider.call([
   Content.text("What's in this image?"),
   Content.image_url("https://example.com/cat.png")
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 
 # Base64 image data
 image_bytes = File.read!("photo.png")
 {:ok, response, _ctx} = Strider.call([
   Content.text("Describe this photo"),
   Content.image(image_bytes, "image/png")
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 
 # PDF file
 pdf_bytes = File.read!("report.pdf")
 {:ok, response, _ctx} = Strider.call([
   Content.text("Summarize this document"),
   Content.file(pdf_bytes, "application/pdf", filename: "report.pdf")
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 ```
 
 Plain strings are automatically wrapped as text content.
@@ -144,7 +144,7 @@ Pass conversation history directly as messages:
   %{role: :user, content: "My name is Alice"},
   %{role: :assistant, content: "Nice to meet you, Alice!"},
   %{role: :user, content: "What's my name?"}
-], model: "anthropic:claude-4-5-sonnet")
+], model: "anthropic:claude-sonnet-4-5")
 
 # => "Your name is Alice."
 ```
@@ -154,12 +154,12 @@ For stateful conversations across multiple calls, use the `:context` option:
 ```elixir
 # First call - get back the context
 {:ok, _response, context} = Strider.call("My name is Alice.",
-  model: "anthropic:claude-4-5-sonnet"
+  model: "anthropic:claude-sonnet-4-5"
 )
 
 # Second call - pass the context to continue the conversation
 {:ok, response, _context} = Strider.call("What's my name?",
-  model: "anthropic:claude-4-5-sonnet",
+  model: "anthropic:claude-sonnet-4-5",
   context: context
 )
 
@@ -173,7 +173,7 @@ You can also combine messages with an existing context - messages are appended:
   %{role: :user, content: "What's 2+2?"},
   %{role: :assistant, content: "4"},
   %{role: :user, content: "And what's that times 10?"}
-], model: "anthropic:claude-4-5-sonnet", context: existing_context)
+], model: "anthropic:claude-sonnet-4-5", context: existing_context)
 ```
 
 ## Explicit Agents
@@ -181,7 +181,7 @@ You can also combine messages with an existing context - messages are appended:
 For more control, create an agent explicitly:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
   system_prompt: "You are a helpful assistant.",
   temperature: 0.7,
   max_tokens: 1000
@@ -203,6 +203,7 @@ Hooks enable middleware-like transformations at each stage of agent execution:
 ```elixir
 defmodule MyApp.LoggingHooks do
   @behaviour Strider.Hooks
+  require Logger
 
   @impl true
   def on_call_start(_agent, content, _context) do
@@ -218,7 +219,7 @@ defmodule MyApp.LoggingHooks do
 end
 
 # Use hooks
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
   hooks: MyApp.LoggingHooks
 )
 ```
@@ -235,13 +236,13 @@ Hooks can:
 Pass API keys at runtime for multi-tenant applications:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet", api_key: user_api_key})
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
 ```
 
 ## Telemetry
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
   hooks: Strider.Telemetry.Hooks
 )
 ```
@@ -278,13 +279,13 @@ alias Strider.Sandbox
 alias Strider.Sandbox.Adapters.Docker
 
 # Uses default sandbox image - no network access
-{:ok, sandbox} = Sandbox.create(Docker)
+{:ok, sandbox} = Sandbox.create({Docker, %{}})
 {:ok, result} = Sandbox.exec(sandbox, "python3 -c 'print(1+1)'")
 {:ok, result} = Sandbox.exec(sandbox, "node -e 'console.log(1+1)'")
 
 # Pin to a specific image version (recommended for production)
 {:ok, sandbox} = Sandbox.create({Docker, %{
-  image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"
+  image: "ghcr.io/bradleygolden/strider-sandbox:latest"
 }})
 
 # Use a custom image (note: no network isolation unless image supports it)
@@ -316,7 +317,7 @@ alias Strider.Sandbox.Adapters.Fly
   mounts: [%{name: "data", path: "/data", size_gb: 10}]
 }})
 
-Sandbox.await_ready(sandbox, port: 4001)
+{:ok, _metadata} = Sandbox.await_ready(sandbox, port: 4001)
 {:ok, result} = Sandbox.exec(sandbox, "node --version")
 ```
 
@@ -384,20 +385,12 @@ Write your own by implementing `Strider.Backend`.
 
 ## Development
 
-### Sandbox Image
-
-The sandbox image (`ghcr.io/bradleygolden/strider-sandbox`) provides:
-- Network isolation via iptables (no outbound traffic by default)
-- Polyglot runtime (Python 3, Node.js)
-- Non-root execution (runs as `sandbox` user)
-
-**Using a specific version:**
-
-```elixir
-Sandbox.create({Docker, %{image: "ghcr.io/bradleygolden/strider-sandbox:c2667e1"}})
+```bash
+mix test                    # Excludes docker tests
+mix test --include docker   # Runs docker integration tests
 ```
 
-**Building and pushing (multi-arch for Mac + Fly.io):**
+### Building the Sandbox Image
 
 ```bash
 REF=$(git rev-parse --short HEAD)
@@ -406,15 +399,6 @@ REF=$(git rev-parse --short HEAD)
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t ghcr.io/bradleygolden/strider-sandbox:$REF \
   -f priv/sandbox/Dockerfile priv/sandbox --push
-```
-
-### Running Integration Tests
-
-Docker integration tests are excluded by default:
-
-```bash
-mix test                    # Excludes docker tests
-mix test --include docker   # Runs docker integration tests
 ```
 
 ## Ecosystem
@@ -428,7 +412,7 @@ mix test --include docker   # Runs docker integration tests
 Install the JS package via GitHub:
 
 ```json
-"strider-sandbox": "github:bradleygolden/strider-sandbox#e841831"
+"strider-sandbox": "github:bradleygolden/strider-sandbox"
 ```
 
 **Status:**

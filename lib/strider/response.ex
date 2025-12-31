@@ -149,7 +149,7 @@ defmodule Strider.Response do
   """
   @spec has_tool_calls?(t()) :: boolean()
   def has_tool_calls?(%__MODULE__{tool_calls: tool_calls}) do
-    tool_calls != [] and tool_calls != nil
+    tool_calls != []
   end
 
   @doc """
@@ -202,4 +202,25 @@ defmodule Strider.Response do
       input + output
     end
   end
+
+  @doc """
+  Gets the text content from the response.
+
+  Returns the content if it's a string, or nil if content is nil or non-string.
+  This is a convenience for the common case of extracting text responses.
+
+  ## Examples
+
+      iex> response = Strider.Response.new(content: "Hello, world!")
+      iex> Strider.Response.text(response)
+      "Hello, world!"
+
+      iex> response = Strider.Response.new(content: nil)
+      iex> Strider.Response.text(response)
+      nil
+
+  """
+  @spec text(t()) :: String.t() | nil
+  def text(%__MODULE__{content: content}) when is_binary(content), do: content
+  def text(%__MODULE__{}), do: nil
 end

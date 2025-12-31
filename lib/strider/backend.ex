@@ -35,9 +35,9 @@ defmodule Strider.Backend do
   2. Parse the response according to the schema
   3. Return structured data in `response.content`
 
-  Example with structured output (requires `:strider_schema` dep):
+  Example with structured output (requires `:zoi` dep):
 
-      alias StriderSchema.Zoi, as: Schema
+      alias Strider.Schema.Zoi, as: Schema
 
       output_schema = Schema.object(%{
         name: Schema.string(),
@@ -58,7 +58,7 @@ defmodule Strider.Backend do
 
   ## Optional Callbacks
 
-  - `introspect/0` - Returns metadata about the backend
+  - `introspect/1` - Returns metadata about the backend
 
   """
 
@@ -109,7 +109,7 @@ defmodule Strider.Backend do
   @callback stream(config(), messages(), opts()) :: {:ok, Enumerable.t()} | error()
 
   @typedoc """
-  Metadata returned by introspect/0 for observability.
+  Metadata returned by introspect/1 for observability.
 
   These align with OpenTelemetry GenAI semantic conventions.
   """
@@ -123,30 +123,36 @@ defmodule Strider.Backend do
         }
 
   @doc """
-  Returns metadata about the backend configuration.
+  Returns metadata about a backend configuration.
 
-  Used by telemetry/tracing to identify provider and model without
-  parsing backend config. Aligns with OpenTelemetry GenAI conventions.
+  Used by telemetry/tracing to identify provider and model.
+  Aligns with OpenTelemetry GenAI conventions.
+
+  ## Parameters
+
+  - `config` - The backend configuration map (same as passed to call/3)
 
   ## Expected Keys
 
   - `:provider` - Provider name ("anthropic", "openai", "google", etc.)
   - `:model` - Configured model identifier
-  - `:operation` - Operation type ("chat", "embeddings", etc.)
+  - `:operation` - Operation type (:chat, :embeddings, etc.)
 
   ## Example
 
       @impl true
-      def introspect do
+      def introspect(config) do
         %{
           provider: "anthropic",
-          model: "claude-sonnet-4-20250514",
+          model: Map.get(config, :model, "unknown"),
           operation: :chat
         }
       end
 
+  Note: For the actual model used in a specific call (which may differ
+  from the configured model), check `response.metadata.model`.
   """
-  @callback introspect() :: introspection()
+  @callback introspect(config()) :: introspection()
 
-  @optional_callbacks [introspect: 0]
+  @optional_callbacks [introspect: 1]
 end

@@ -1,15 +1,5 @@
 defmodule Strider.Runtime do
-  @moduledoc """
-  Orchestrates agent calls and streaming.
-
-  The runtime is responsible for:
-  - Building messages from context and system prompt
-  - Calling the appropriate backend
-  - Updating context with responses
-  - Invoking hooks at lifecycle points (with transformation support)
-
-  This module is used internally by `Strider.call/4` and `Strider.stream/4`.
-  """
+  @moduledoc false
 
   alias Strider.{Agent, Context, Hooks, Message, Response}
 
@@ -165,23 +155,7 @@ defmodule Strider.Runtime do
   end
 
   defp build_backend_config(agent) do
-    case agent.backend do
-      {_type, config} when is_list(config) ->
-        config
-        |> Enum.into(%{})
-        |> Map.merge(agent.config)
-
-      {_type, config} when is_map(config) ->
-        Map.merge(config, agent.config)
-
-      {_type, model} ->
-        Map.put(agent.config, :model, model)
-
-      {_type, model, opts} ->
-        opts
-        |> Enum.into(%{})
-        |> Map.merge(agent.config)
-        |> Map.put(:model, model)
-    end
+    {_type, backend_config} = agent.backend
+    Map.merge(backend_config, agent.config)
   end
 end

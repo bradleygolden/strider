@@ -64,8 +64,7 @@ defmodule Strider.MixProject do
 
   defp description do
     """
-    An ultra-lean Elixir framework for building AI agents.
-    Struct-first API with provider abstraction, streaming support, and extensible hooks.
+    An AI agent framework for Elixir that simplifies the creation of AI agents within codebases.
     """
   end
 
@@ -81,9 +80,61 @@ defmodule Strider.MixProject do
 
   defp docs do
     [
-      main: "Strider",
+      main: "readme",
       source_ref: "v#{@version}",
-      source_url: @source_url
+      source_url: @source_url,
+      extras: ["README.md"],
+      groups_for_modules: [
+        Core: [
+          Strider,
+          Strider.Agent,
+          Strider.Context,
+          Strider.Message,
+          Strider.Response,
+          Strider.Content,
+          Strider.Content.Part
+        ],
+        Backends: [
+          Strider.Backend,
+          Strider.Backends.Mock,
+          Strider.Backends.ReqLLM
+        ],
+        Hooks: [
+          Strider.Hooks,
+          Strider.Telemetry.Hooks
+        ],
+        "Prompt Templates": [
+          Strider.Prompt,
+          Strider.Prompt.Solid,
+          Strider.Prompt.Sigils
+        ],
+        "Schema Validation": [
+          Strider.Schema,
+          Strider.Schema.Zoi
+        ],
+        Telemetry: [
+          Strider.Telemetry
+        ],
+        Sandbox: [
+          Strider.Sandbox,
+          Strider.Sandbox.Adapter,
+          Strider.Sandbox.Instance,
+          Strider.Sandbox.ExecResult,
+          Strider.Sandbox.Adapters.Docker,
+          Strider.Sandbox.Adapters.Fly,
+          Strider.Sandbox.Adapters.Test
+        ],
+        "Sandbox Pool": [
+          Strider.Sandbox.Pool,
+          Strider.Sandbox.Pool.Store,
+          Strider.Sandbox.Pool.Store.Memory,
+          Strider.Sandbox.Pool.Store.Postgres,
+          Strider.Sandbox.Pool.Store.Postgres.Migrations
+        ],
+        Proxy: [
+          Strider.Proxy.Sandbox
+        ]
+      ]
     ]
   end
 end

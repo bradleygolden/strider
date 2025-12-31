@@ -142,12 +142,12 @@ if Code.ensure_loaded?(Plug) do
       filtered ++ credentials
     end
 
-    defp streaming_request?(body) when is_binary(body) do
-      String.contains?(body, "\"stream\":true") or
-        String.contains?(body, "\"stream\": true")
+    defp streaming_request?(body) do
+      case Jason.decode(body) do
+        {:ok, %{"stream" => true}} -> true
+        _ -> false
+      end
     end
-
-    defp streaming_request?(_), do: false
 
     defp stream_request(conn, url, headers, body, timeout) do
       conn =
@@ -210,8 +210,8 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp get_content_type(headers) do
-      case List.keyfind(headers, "content-type", 0) do
-        {_, value} -> value
+      case Map.get(headers, "content-type") do
+        [value | _] -> value
         nil -> "application/json"
       end
     end

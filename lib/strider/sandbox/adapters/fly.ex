@@ -72,10 +72,22 @@ if Code.ensure_loaded?(Req) do
     @behaviour Strider.Sandbox.Adapter
 
     alias Strider.Sandbox.Adapters.Fly.Client
+    alias Strider.Sandbox.Adapters.Fly.VolumeManager
     alias Strider.Sandbox.ExecResult
+    alias Strider.Sandbox.FileOps
     alias Strider.Sandbox.HealthPoller
+    alias Strider.Sandbox.NetworkEnv
 
     @default_image "ghcr.io/bradleygolden/strider-sandbox"
+    @default_memory_mb 256
+    @default_cpus 1
+    @default_cpu_kind "shared"
+    @default_health_port 4001
+    @default_health_interval 2_000
+    @default_timeout_ms 60_000
+    @default_exec_timeout_ms 30_000
+    @fly_max_exec_timeout_ms 60_000
+    @fly_max_wait_timeout_sec 60
 
     @doc """
     Creates a new Fly Machine sandbox.
@@ -115,9 +127,9 @@ if Code.ensure_loaded?(Req) do
       region = Map.get(config, :region)
 
       with :ok <- maybe_create_app(config, app_name, api_token),
-           {:ok, validated_mounts} <- validate_mounts(Map.get(config, :mounts)),
+           {:ok, validated_mounts} <- VolumeManager.validate(Map.get(config, :mounts)),
            {:ok, resolved_mounts, created_volume_ids} <-
-             resolve_mounts(validated_mounts, app_name, region, api_token) do
+             VolumeManager.resolve(validated_mounts, app_name, region, api_token) do
         body =
           %{
             skip_launch: Map.get(config, :skip_launch, false),
@@ -125,9 +137,9 @@ if Code.ensure_loaded?(Req) do
               image: Map.get(config, :image, @default_image),
               env: build_env(config),
               guest: %{
-                memory_mb: Map.get(config, :memory_mb, 256),
-                cpus: Map.get(config, :cpu, 1),
-                cpu_kind: Map.get(config, :cpu_kind, "shared")
+                memory_mb: Map.get(config, :memory_mb, @default_memory_mb),
+                cpus: Map.get(config, :cpu, @default_cpus),
+                cpu_kind: Map.get(config, :cpu_kind, @default_cpu_kind)
               },
               services: Map.get(config, :services) || build_services(Map.get(config, :ports, [])),
               auto_destroy: Map.get(config, :auto_destroy, true),
@@ -137,7 +149,7 @@ if Code.ensure_loaded?(Req) do
           |> maybe_add_region(config)
           |> maybe_add_mounts(resolved_mounts)
 
-        case create_machine_if_none_exist(app_name, body, api_token) do
+        case Client.post("/apps/#{app_name}/machines", body, api_token) do
           {:ok, %{"id" => machine_id} = response} ->
             metadata = %{
               private_ip: Map.get(response, "private_ip"),
@@ -147,7 +159,7 @@ if Code.ensure_loaded?(Req) do
             {:ok, "#{app_name}:#{machine_id}", metadata}
 
           {:error, reason} ->
-            cleanup_volumes(created_volume_ids, app_name, api_token)
+            VolumeManager.cleanup(created_volume_ids, app_name, api_token)
             {:error, reason}
         end
       end
@@ -162,7 +174,9 @@ if Code.ensure_loaded?(Req) do
     def exec(sandbox_id, command, opts) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
-      timeout_ms = min(Keyword.get(opts, :timeout, 30_000), 60_000)
+
+      timeout_ms =
+        min(Keyword.get(opts, :timeout, @default_exec_timeout_ms), @fly_max_exec_timeout_ms)
 
       body = %{
         command: ["sh", "-c", command],
@@ -170,14 +184,13 @@ if Code.ensure_loaded?(Req) do
       }
 
       case Client.post("/apps/#{app_name}/machines/#{machine_id}/exec", body, api_token) do
-        {:ok, %{"stdout" => stdout, "stderr" => stderr, "exit_code" => exit_code}} ->
-          {:ok, %ExecResult{stdout: stdout || "", stderr: stderr || "", exit_code: exit_code}}
-
-        {:ok, %{"stdout" => stdout, "exit_code" => exit_code}} ->
-          {:ok, %ExecResult{stdout: stdout || "", exit_code: exit_code}}
-
-        {:error, :timeout} ->
-          {:error, :timeout}
+        {:ok, %{"exit_code" => exit_code} = result} ->
+          {:ok,
+           %ExecResult{
+             stdout: result["stdout"] || "",
+             stderr: result["stderr"] || "",
+             exit_code: exit_code
+           }}
 
         {:error, reason} ->
           {:error, reason}
@@ -188,9 +201,9 @@ if Code.ensure_loaded?(Req) do
     Terminates and destroys the Fly Machine.
     """
     @impl true
-    def terminate(sandbox_id) do
+    def terminate(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
-      api_token = get_api_token!([])
+      api_token = get_api_token!(opts)
 
       case Client.delete("/apps/#{app_name}/machines/#{machine_id}?force=true", api_token) do
         {:ok, _} -> :ok
@@ -219,7 +232,7 @@ if Code.ensure_loaded?(Req) do
     def terminate_with_app(sandbox_id, opts \\ []) do
       {app_name, _machine_id} = parse_sandbox_id!(sandbox_id)
 
-      with :ok <- terminate(sandbox_id) do
+      with :ok <- terminate(sandbox_id, opts) do
         if Keyword.get(opts, :destroy_app, false) do
           api_token = get_api_token!(opts)
           Client.delete_app(app_name, api_token)
@@ -233,9 +246,9 @@ if Code.ensure_loaded?(Req) do
     Gets the current status of the Fly Machine.
     """
     @impl true
-    def status(sandbox_id) do
+    def status(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
-      api_token = get_api_token!([])
+      api_token = get_api_token!(opts)
 
       case Client.get("/apps/#{app_name}/machines/#{machine_id}", api_token) do
         {:ok, %{"state" => "started"}} -> :running
@@ -259,48 +272,19 @@ if Code.ensure_loaded?(Req) do
       {:ok, "http://#{machine_id}.vm.#{app_name}.internal:#{port}"}
     end
 
-    # Additional Fly-specific functions (not part of Adapter behaviour)
-
-    @doc """
-    Reads a file from the Fly Machine using base64 encoding.
-    """
     @impl true
     def read_file(sandbox_id, path, opts) do
-      case exec(sandbox_id, "base64 -w0 '#{escape_path(path)}'", opts) do
-        {:ok, %{exit_code: 0, stdout: encoded}} ->
-          case Base.decode64(String.trim(encoded)) do
-            {:ok, content} -> {:ok, content}
-            :error -> {:error, :invalid_base64}
-          end
-
-        {:ok, %{exit_code: _, stderr: err}} ->
-          {:error, err}
-
-        {:ok, %{exit_code: _}} ->
-          {:error, :file_not_found}
-
-        error ->
-          error
-      end
+      FileOps.read_file(&exec(sandbox_id, &1, &2), path, opts)
     end
 
-    @doc """
-    Writes a file to the Fly Machine using base64 encoding.
-    """
     @impl true
     def write_file(sandbox_id, path, content, opts) do
-      encoded = Base.encode64(content)
-      escaped_path = escape_path(path)
+      FileOps.write_file(&exec(sandbox_id, &1, &2), path, content, opts)
+    end
 
-      cmd =
-        "mkdir -p \"$(dirname '#{escaped_path}')\" && echo '#{encoded}' | base64 -d > '#{escaped_path}'"
-
-      case exec(sandbox_id, cmd, opts) do
-        {:ok, %{exit_code: 0}} -> :ok
-        {:ok, %{exit_code: _, stderr: err}} when err != "" -> {:error, err}
-        {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
-        error -> error
-      end
+    @impl true
+    def write_files(sandbox_id, files, opts) do
+      FileOps.write_files(&exec(sandbox_id, &1, &2), files, opts)
     end
 
     @doc """
@@ -351,23 +335,29 @@ if Code.ensure_loaded?(Req) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
 
-      machine_config = build_machine_config(config)
-
       machine_config =
-        if Map.has_key?(config, :mounts) do
-          maybe_add_mounts_to_config(machine_config, Map.get(config, :mounts))
-        else
+        config
+        |> build_machine_config()
+        |> add_mounts_for_update(config, app_name, machine_id, api_token)
+
+      body = %{config: machine_config}
+      Client.post("/apps/#{app_name}/machines/#{machine_id}", body, api_token)
+    end
+
+    defp add_mounts_for_update(machine_config, config, app_name, machine_id, api_token) do
+      case Map.fetch(config, :mounts) do
+        {:ok, mounts} ->
+          maybe_add_mounts_to_config(machine_config, mounts)
+
+        :error ->
           case Client.get("/apps/#{app_name}/machines/#{machine_id}", api_token) do
-            {:ok, %{"config" => %{"mounts" => existing_mounts}}} when is_list(existing_mounts) ->
-              Map.put(machine_config, :mounts, existing_mounts)
+            {:ok, %{"config" => %{"mounts" => existing}}} when is_list(existing) ->
+              Map.put(machine_config, :mounts, existing)
 
             _ ->
               machine_config
           end
-        end
-
-      body = %{config: machine_config}
-      Client.post("/apps/#{app_name}/machines/#{machine_id}", body, api_token)
+      end
     end
 
     @doc """
@@ -425,22 +415,7 @@ if Code.ensure_loaded?(Req) do
     def get_machine_volumes(sandbox_id, opts \\ []) do
       {app_name, machine_id} = parse_sandbox_id!(sandbox_id)
       api_token = get_api_token!(opts)
-
-      case Client.get_machine(app_name, machine_id, api_token) do
-        {:ok, %{"config" => %{"mounts" => mounts}}} when is_list(mounts) ->
-          volumes =
-            Enum.map(mounts, fn mount ->
-              %{volume: mount["volume"], path: mount["path"]}
-            end)
-
-          {:ok, volumes}
-
-        {:ok, _} ->
-          {:ok, []}
-
-        {:error, _} = error ->
-          error
-      end
+      VolumeManager.get_machine_volumes(app_name, machine_id, api_token)
     end
 
     @doc """
@@ -471,26 +446,7 @@ if Code.ensure_loaded?(Req) do
     """
     def list_volumes(app_name, opts \\ []) do
       api_token = get_api_token!(opts)
-
-      case Client.list_volumes(app_name, api_token) do
-        {:ok, volumes} ->
-          {:ok, Enum.map(volumes, &transform_volume/1)}
-
-        {:error, _} = error ->
-          error
-      end
-    end
-
-    defp transform_volume(vol) do
-      %{
-        id: vol["id"],
-        name: vol["name"],
-        state: vol["state"],
-        attached_machine_id: vol["attached_machine_id"],
-        region: vol["region"],
-        size_gb: vol["size_gb"],
-        created_at: vol["created_at"]
-      }
+      VolumeManager.list(app_name, api_token)
     end
 
     @doc """
@@ -510,34 +466,24 @@ if Code.ensure_loaded?(Req) do
     """
     @impl true
     def await_ready(sandbox_id, metadata, opts \\ []) do
-      timeout_ms = Keyword.get(opts, :timeout, 60_000)
+      timeout_ms = Keyword.get(opts, :timeout, @default_timeout_ms)
       deadline = System.monotonic_time(:millisecond) + timeout_ms
-      # Fly wait API has a max timeout of 60 seconds
-      wait_timeout_sec = min(div(timeout_ms, 1000), 60)
-      port = Keyword.get(opts, :port, 4001)
-      interval = Keyword.get(opts, :interval, 2_000)
+      wait_timeout_sec = min(div(timeout_ms, 1000), @fly_max_wait_timeout_sec)
+      port = Keyword.get(opts, :port, @default_health_port)
+      interval = Keyword.get(opts, :interval, @default_health_interval)
 
-      # Wait for machine to start, but proceed to health polling even on timeout (408)
-      # since the machine may still become ready within our overall deadline
-      case wait(sandbox_id, "started", Keyword.put(opts, :timeout, wait_timeout_sec)) do
-        {:ok, _} ->
-          :ok
-
-        {:error, {:api_error, 408, _}} ->
-          # Wait timed out but machine may still start - continue to health polling
-          :ok
-
-        {:error, reason} ->
-          {:error, reason}
+      with :ok <- wait_for_started(sandbox_id, opts, wait_timeout_sec) do
+        remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
+        health_url = build_health_url(sandbox_id, metadata, port)
+        HealthPoller.poll(health_url, timeout: remaining_ms, interval: interval)
       end
-      |> case do
-        :ok ->
-          remaining_ms = max(0, deadline - System.monotonic_time(:millisecond))
-          health_url = build_health_url(sandbox_id, metadata, port)
-          HealthPoller.poll(health_url, timeout: remaining_ms, interval: interval)
+    end
 
-        error ->
-          error
+    defp wait_for_started(sandbox_id, opts, timeout_sec) do
+      case wait(sandbox_id, "started", Keyword.put(opts, :timeout, timeout_sec)) do
+        {:ok, _} -> :ok
+        {:error, {:api_error, 408, _}} -> :ok
+        {:error, reason} -> {:error, reason}
       end
     end
 
@@ -554,16 +500,14 @@ if Code.ensure_loaded?(Req) do
     # Private helpers
 
     defp build_machine_config(config) do
-      base = %{
+      %{
         image: Map.fetch!(config, :image),
         guest: %{
-          memory_mb: Map.get(config, :memory_mb, 256),
-          cpus: Map.get(config, :cpu, 1),
-          cpu_kind: Map.get(config, :cpu_kind, "shared")
+          memory_mb: Map.get(config, :memory_mb, @default_memory_mb),
+          cpus: Map.get(config, :cpu, @default_cpus),
+          cpu_kind: Map.get(config, :cpu_kind, @default_cpu_kind)
         }
       }
-
-      base
       |> maybe_add_env(config)
       |> maybe_add_services(config)
     end
@@ -605,38 +549,30 @@ if Code.ensure_loaded?(Req) do
     end
 
     defp get_api_token!(config_or_opts) do
-      config_or_opts =
-        if is_list(config_or_opts), do: Map.new(config_or_opts), else: config_or_opts
-
-      Map.get(config_or_opts, :api_token) ||
-        System.get_env("FLY_API_TOKEN") ||
-        raise ArgumentError, "api_token is required in config or FLY_API_TOKEN env var"
+      config_or_opts
+      |> ensure_map()
+      |> Map.get(:api_token, System.get_env("FLY_API_TOKEN"))
+      |> case do
+        nil -> raise ArgumentError, "api_token is required in config or FLY_API_TOKEN env var"
+        token -> token
+      end
     end
 
-    defp build_env(config) do
-      base_env =
-        config
-        |> Map.get(:env, [])
-        |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
+    defp ensure_map(map) when is_map(map), do: map
+    defp ensure_map(keyword) when is_list(keyword), do: Map.new(keyword)
 
-      base_env
+    defp build_env(config) do
+      config
+      |> Map.get(:env, [])
+      |> Map.new(fn {k, v} -> {to_string(k), to_string(v)} end)
       |> add_network_env(config)
     end
 
     defp add_network_env(env, config) do
-      case Map.get(config, :proxy) do
-        nil ->
-          Map.put(env, "STRIDER_NETWORK_MODE", "none")
-
-        proxy_opts when is_list(proxy_opts) ->
-          ip = Keyword.fetch!(proxy_opts, :ip)
-          port = Keyword.get(proxy_opts, :port, 4000)
-
-          env
-          |> Map.put("STRIDER_NETWORK_MODE", "proxy_only")
-          |> Map.put("STRIDER_PROXY_IP", to_string(ip))
-          |> Map.put("STRIDER_PROXY_PORT", to_string(port))
-      end
+      config
+      |> Map.get(:proxy)
+      |> NetworkEnv.build()
+      |> Map.merge(env)
     end
 
     defp build_services([]), do: []
@@ -658,100 +594,10 @@ if Code.ensure_loaded?(Req) do
       end
     end
 
-    defp validate_mounts(nil), do: {:ok, []}
-    defp validate_mounts([]), do: {:ok, []}
-
-    defp validate_mounts(mounts) when is_list(mounts) do
-      Enum.reduce_while(mounts, {:ok, []}, fn mount, {:ok, acc} ->
-        case validate_mount(mount) do
-          {:ok, validated} -> {:cont, {:ok, [validated | acc]}}
-          {:error, _} = err -> {:halt, err}
-        end
-      end)
-      |> case do
-        {:ok, validated} -> {:ok, Enum.reverse(validated)}
-        error -> error
-      end
-    end
-
-    defp validate_mount(%{volume: vol_id, path: path})
-         when is_binary(vol_id) and is_binary(path) do
-      {:ok, {:existing, vol_id, path}}
-    end
-
-    defp validate_mount(%{name: name, path: path, size_gb: size})
-         when is_binary(name) and is_binary(path) and is_integer(size) and size > 0 do
-      {:ok, {:create, name, path, size}}
-    end
-
-    defp validate_mount(mount) do
-      {:error, {:invalid_mount, mount}}
-    end
-
-    defp resolve_mounts(validated_mounts, app_name, region, api_token) do
-      resolve_mounts(validated_mounts, app_name, region, api_token, [], [])
-    end
-
-    defp resolve_mounts([], _app, _region, _token, resolved, created) do
-      {:ok, Enum.reverse(resolved), Enum.reverse(created)}
-    end
-
-    defp resolve_mounts([{:existing, vol_id, path} | rest], app, region, token, resolved, created) do
-      mount = %{volume: vol_id, path: path}
-      resolve_mounts(rest, app, region, token, [mount | resolved], created)
-    end
-
-    defp resolve_mounts(
-           [{:create, name, path, size} | rest],
-           app,
-           region,
-           token,
-           resolved,
-           created
-         ) do
-      case Client.create_volume(app, name, size, region, token) do
-        {:ok, %{"id" => vol_id}} ->
-          mount = %{volume: vol_id, path: path}
-          resolve_mounts(rest, app, region, token, [mount | resolved], [vol_id | created])
-
-        {:error, reason} ->
-          cleanup_volumes(created, app, token)
-          {:error, {:volume_creation_failed, name, reason}}
-      end
-    end
-
-    defp cleanup_volumes([], _app, _token), do: :ok
-
-    defp cleanup_volumes(volume_ids, app_name, api_token) do
-      Enum.each(volume_ids, fn vol_id ->
-        Client.delete_volume(app_name, vol_id, api_token)
-      end)
-    end
-
     defp maybe_add_mounts(body, []), do: body
 
     defp maybe_add_mounts(body, mounts) when is_list(mounts) do
       put_in(body, [:config, :mounts], mounts)
-    end
-
-    defp escape_path(path) do
-      String.replace(path, "'", "'\\''")
-    end
-
-    defp create_machine_if_none_exist(app_name, body, api_token) do
-      case Client.get("/apps/#{app_name}/machines", api_token) do
-        {:ok, [%{"id" => existing_id} | _]} ->
-          case Client.get("/apps/#{app_name}/machines/#{existing_id}", api_token) do
-            {:ok, response} -> {:ok, response}
-            error -> error
-          end
-
-        {:ok, []} ->
-          Client.post("/apps/#{app_name}/machines", body, api_token)
-
-        {:error, _} ->
-          Client.post("/apps/#{app_name}/machines", body, api_token)
-      end
     end
 
     defp maybe_create_app(%{create_app: true} = config, app_name, api_token) do

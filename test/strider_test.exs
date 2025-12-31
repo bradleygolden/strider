@@ -32,7 +32,7 @@ defmodule StriderTest do
     end
 
     test "preserves conversation history" do
-      agent = Agent.new({:mock, responses: ["First reply", "Second reply"]})
+      agent = Agent.new({:mock, response: "Reply"})
       context = Context.new()
 
       {:ok, _response1, context} = Strider.call(agent, "First message", context)
@@ -311,9 +311,9 @@ defmodule StriderTest do
 
   describe "Agent.new/1 API styles" do
     test "tuple as first argument" do
-      agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet"})
+      agent = Agent.new({:req_llm, "anthropic:claude-sonnet-4-5"})
 
-      assert agent.backend == {:req_llm, "anthropic:claude-4-5-sonnet"}
+      assert agent.backend == {:req_llm, %{model: "anthropic:claude-sonnet-4-5"}}
       assert agent.system_prompt == nil
     end
 
@@ -324,7 +324,7 @@ defmodule StriderTest do
           temperature: 0.7
         )
 
-      assert agent.backend == {:req_llm, "openai:gpt-4"}
+      assert agent.backend == {:req_llm, %{model: "openai:gpt-4"}}
       assert agent.system_prompt == "You are helpful."
       assert agent.config == %{temperature: 0.7}
     end
@@ -336,20 +336,21 @@ defmodule StriderTest do
           system_prompt: "You are helpful."
         )
 
-      assert agent.backend == {:req_llm, "openai:gpt-4"}
+      assert agent.backend == {:req_llm, %{model: "openai:gpt-4"}}
       assert agent.system_prompt == "You are helpful."
     end
 
     test "three-element tuple with backend options (BYOK)" do
-      agent = Agent.new({:req_llm, "anthropic:claude-4-5-sonnet", api_key: "sk-test"})
+      agent = Agent.new({:req_llm, "anthropic:claude-sonnet-4-5", api_key: "sk-test"})
 
-      assert agent.backend == {:req_llm, "anthropic:claude-4-5-sonnet", [api_key: "sk-test"]}
+      assert agent.backend ==
+               {:req_llm, %{model: "anthropic:claude-sonnet-4-5", api_key: "sk-test"}}
     end
 
     test "mock backend with keyword config" do
       agent = Agent.new({:mock, response: "Hello!", delay: 100})
 
-      assert agent.backend == {:mock, [response: "Hello!", delay: 100]}
+      assert agent.backend == {:mock, %{response: "Hello!", delay: 100}}
     end
   end
 end

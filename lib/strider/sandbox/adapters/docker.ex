@@ -13,7 +13,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
     - `:default` - Uses image's default ENTRYPOINT/CMD
     - `["cmd", "arg1", ...]` - Custom command list
   - `:memory_mb` - Memory limit in MB
-  - `:cpu_cores` - CPU limit
+  - `:cpu` - CPU limit
   - `:pids_limit` - Max number of processes
   - `:mounts` - List of volume mounts: `[{src, dest}]` or `[{src, dest, readonly: true}]`
   - `:ports` - List of port mappings: `[{host_port, container_port}]`
@@ -38,10 +38,12 @@ defmodule Strider.Sandbox.Adapters.Docker do
   @behaviour Strider.Sandbox.Adapter
 
   alias Strider.Sandbox.ExecResult
+  alias Strider.Sandbox.FileOps
+  alias Strider.Sandbox.NetworkEnv
 
   @default_image "ghcr.io/bradleygolden/strider-sandbox"
   @default_workdir "/workspace"
-  @default_timeout 30_000
+  @default_exec_timeout_ms 30_000
 
   @impl true
   def create(config) do
@@ -64,13 +66,8 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   @impl true
   def exec(container_id, command, opts) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
-    workdir = Keyword.get(opts, :workdir)
-    user = Keyword.get(opts, :user, "sandbox")
-
-    args = ["exec", "-u", user]
-    args = if workdir, do: args ++ ["-w", workdir], else: args
-    args = args ++ [container_id, "sh", "-c", command]
+    timeout = Keyword.get(opts, :timeout, @default_exec_timeout_ms)
+    args = build_exec_args(container_id, command, opts)
 
     task = Task.async(fn -> System.cmd("docker", args, stderr_to_stdout: true) end)
 
@@ -83,14 +80,25 @@ defmodule Strider.Sandbox.Adapters.Docker do
     end
   end
 
+  defp build_exec_args(container_id, command, opts) do
+    user = Keyword.get(opts, :user, "sandbox")
+
+    ["exec", "-u", user]
+    |> maybe_add_workdir(Keyword.get(opts, :workdir))
+    |> Kernel.++([container_id, "sh", "-c", command])
+  end
+
+  defp maybe_add_workdir(args, nil), do: args
+  defp maybe_add_workdir(args, workdir), do: args ++ ["-w", workdir]
+
   @impl true
-  def terminate(container_id) do
+  def terminate(container_id, _opts \\ []) do
     System.cmd("docker", ["rm", "-f", container_id], stderr_to_stdout: true)
     :ok
   end
 
   @impl true
-  def status(container_id) do
+  def status(container_id, _opts \\ []) do
     case System.cmd("docker", ["inspect", "-f", "{{.State.Status}}", container_id],
            stderr_to_stdout: true
          ) do
@@ -107,34 +115,17 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   @impl true
   def read_file(container_id, path, opts) do
-    case exec(container_id, "base64 -w 0 '#{escape_path(path)}'", opts) do
-      {:ok, %{exit_code: 0, stdout: encoded}} ->
-        case Base.decode64(String.trim(encoded)) do
-          {:ok, content} -> {:ok, content}
-          :error -> {:error, :invalid_base64}
-        end
-
-      {:ok, %{exit_code: _}} ->
-        {:error, :file_not_found}
-
-      error ->
-        error
-    end
+    FileOps.read_file(&exec(container_id, &1, &2), path, opts)
   end
 
   @impl true
   def write_file(container_id, path, content, opts) do
-    encoded = Base.encode64(content)
-    escaped_path = escape_path(path)
+    FileOps.write_file(&exec(container_id, &1, &2), path, content, opts)
+  end
 
-    cmd =
-      "mkdir -p \"$(dirname '#{escaped_path}')\" && echo '#{encoded}' | base64 -d > '#{escaped_path}'"
-
-    case exec(container_id, cmd, opts) do
-      {:ok, %{exit_code: 0}} -> :ok
-      {:ok, %{exit_code: code}} -> {:error, {:exit_code, code}}
-      error -> error
-    end
+  @impl true
+  def write_files(container_id, files, opts) do
+    FileOps.write_files(&exec(container_id, &1, &2), files, opts)
   end
 
   # Private helpers
@@ -157,7 +148,7 @@ defmodule Strider.Sandbox.Adapters.Docker do
   defp add_resource_limits(args, config) do
     args
     |> maybe_add("--memory", Map.get(config, :memory_mb), &"#{&1}m")
-    |> maybe_add("--cpus", Map.get(config, :cpu_cores), &to_string/1)
+    |> maybe_add("--cpus", Map.get(config, :cpu), &to_string/1)
     |> maybe_add("--pids-limit", Map.get(config, :pids_limit), &to_string/1)
   end
 
@@ -197,24 +188,10 @@ defmodule Strider.Sandbox.Adapters.Docker do
   end
 
   defp add_network_env(args, config) do
-    case Map.get(config, :proxy) do
-      nil ->
-        args ++ ["-e", "STRIDER_NETWORK_MODE=none"]
-
-      proxy_opts when is_list(proxy_opts) ->
-        ip = Keyword.fetch!(proxy_opts, :ip)
-        port = Keyword.get(proxy_opts, :port, 4000)
-
-        args ++
-          [
-            "-e",
-            "STRIDER_NETWORK_MODE=proxy_only",
-            "-e",
-            "STRIDER_PROXY_IP=#{ip}",
-            "-e",
-            "STRIDER_PROXY_PORT=#{port}"
-          ]
-    end
+    config
+    |> Map.get(:proxy)
+    |> NetworkEnv.build()
+    |> Enum.reduce(args, fn {k, v}, acc -> acc ++ ["-e", "#{k}=#{v}"] end)
   end
 
   defp add_image_and_command(args, config, image) do
@@ -227,8 +204,4 @@ defmodule Strider.Sandbox.Adapters.Docker do
 
   defp maybe_add(args, _flag, nil, _transform), do: args
   defp maybe_add(args, flag, value, transform), do: args ++ [flag, transform.(value)]
-
-  defp escape_path(path) do
-    String.replace(path, "'", "'\\''")
-  end
 end

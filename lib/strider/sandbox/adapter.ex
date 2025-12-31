@@ -3,14 +3,14 @@ defmodule Strider.Sandbox.Adapter do
   Behaviour for sandbox adapters.
 
   Adapters implement the actual sandbox creation and management for different
-  backends (Docker, E2B, Fly Machines, etc.).
+  backends (Docker, Fly Machines, etc.).
 
   ## Required Callbacks
 
-  - `create/1` - Create a new sandbox, return its ID
+  - `create/1` - Create a new sandbox, return its ID and metadata
   - `exec/3` - Execute a command in the sandbox
-  - `terminate/1` - Stop and cleanup the sandbox
-  - `status/1` - Get the current sandbox status
+  - `terminate/2` - Stop and cleanup the sandbox
+  - `status/2` - Get the current sandbox status
 
   ## Optional Callbacks
 
@@ -18,6 +18,23 @@ defmodule Strider.Sandbox.Adapter do
   - `read_file/3` - Read file contents from sandbox
   - `write_file/4` - Write file to sandbox
   - `write_files/3` - Write multiple files to sandbox
+  - `await_ready/3` - Wait for sandbox to become ready
+  - `update/3` - Update sandbox config without destroying
+  - `stop/2` - Stop sandbox without destroying (pause)
+  - `start/2` - Start a stopped sandbox (resume)
+
+  ## Standard Config Fields
+
+  These config fields should work consistently across adapters:
+
+  - `:image` - Container image (e.g., `"node:22-slim"`)
+  - `:memory_mb` - Memory limit in MB (e.g., `512`)
+  - `:env` - Environment variables as `[{name, value}]`
+  - `:ports` - Ports to expose (format varies by adapter)
+  - `:mounts` - Volume/file mounts (format varies by adapter)
+  - `:proxy` - Enable proxy mode for controlled network access
+
+  Adapters may support additional adapter-specific config fields.
 
   ## Example
 
@@ -26,7 +43,7 @@ defmodule Strider.Sandbox.Adapter do
 
         @impl true
         def create(config) do
-          # Create sandbox, return {:ok, sandbox_id} or {:error, reason}
+          # Create sandbox, return {:ok, sandbox_id, metadata} or {:error, reason}
         end
 
         @impl true
@@ -35,12 +52,12 @@ defmodule Strider.Sandbox.Adapter do
         end
 
         @impl true
-        def terminate(sandbox_id) do
+        def terminate(sandbox_id, opts) do
           # Cleanup sandbox, return :ok or {:error, reason}
         end
 
         @impl true
-        def status(sandbox_id) do
+        def status(sandbox_id, opts) do
           # Return :running | :stopped | :terminated | :unknown
         end
       end
@@ -57,8 +74,18 @@ defmodule Strider.Sandbox.Adapter do
   @doc """
   Creates a new sandbox with the given configuration.
 
+  ## Standard Config Fields
+
+  - `:image` - Container image (e.g., `"node:22-slim"`)
+  - `:memory_mb` - Memory limit in MB
+  - `:env` - Environment variables as `[{name, value}]`
+  - `:ports` - Ports to expose
+  - `:mounts` - Volume/file mounts
+  - `:proxy` - Enable proxy mode for network access
+
   Returns `{:ok, sandbox_id, metadata}` on success or `{:error, reason}` on failure.
-  The metadata map contains adapter-specific information (e.g., private_ip for Fly).
+  The metadata map contains adapter-specific information (e.g., `private_ip` for Fly,
+  `port_map` for Docker).
   """
   @callback create(config()) :: {:ok, sandbox_id(), metadata()} | {:error, term()}
 
@@ -76,14 +103,18 @@ defmodule Strider.Sandbox.Adapter do
   @doc """
   Terminates and cleans up the sandbox.
 
+  Options may include adapter-specific credentials (e.g., `:api_token` for Fly).
+
   Returns `:ok` on success or `{:error, reason}` on failure.
   """
-  @callback terminate(sandbox_id()) :: :ok | {:error, term()}
+  @callback terminate(sandbox_id(), opts()) :: :ok | {:error, term()}
 
   @doc """
   Gets the current status of the sandbox.
+
+  Options may include adapter-specific credentials (e.g., `:api_token` for Fly).
   """
-  @callback status(sandbox_id()) :: :running | :stopped | :terminated | :unknown
+  @callback status(sandbox_id(), opts()) :: :running | :stopped | :terminated | :unknown
 
   @doc """
   Gets the URL for an exposed port on the sandbox.

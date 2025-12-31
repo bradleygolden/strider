@@ -1,14 +1,14 @@
 defmodule Strider do
   @moduledoc """
-  Strider - An ultra-lean Elixir framework for building AI agents.
+  Strider - An AI agent framework for Elixir.
 
   ## Quick Start
 
       # Simple call (requires :req_llm dep)
-      {:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
+      {:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-sonnet-4-5")
 
       # Or create an agent explicitly
-      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-4-5-sonnet"},
+      agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
         system_prompt: "You are a helpful assistant."
       )
 
@@ -33,6 +33,7 @@ defmodule Strider do
   ## Optional Packages
 
   - `:req_llm` - Multi-provider LLM backend (enables `Strider.Backends.ReqLLM`)
+  - `:solid` - Prompt templates with Liquid syntax (enables `Strider.Prompt.Solid`)
   - `:telemetry` - Telemetry integration for observability
   - `:zoi` - Schema validation for structured outputs
 
@@ -60,11 +61,11 @@ defmodule Strider do
   ## Examples
 
       # Simple call (no agent needed)
-      {:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-4-5-sonnet")
+      {:ok, response, _ctx} = Strider.call("Hello!", model: "anthropic:claude-sonnet-4-5")
 
       # With system prompt
       {:ok, response, _ctx} = Strider.call("Translate to Spanish",
-        model: "anthropic:claude-4-5-sonnet",
+        model: "anthropic:claude-sonnet-4-5",
         system_prompt: "You are a translator."
       )
 
@@ -73,14 +74,14 @@ defmodule Strider do
       {:ok, response, _ctx} = Strider.call([
         Content.text("What's in this image?"),
         Content.image_url("https://example.com/cat.png")
-      ], model: "anthropic:claude-4-5-sonnet")
+      ], model: "anthropic:claude-sonnet-4-5")
 
       # Messages/conversation history (few-shot, context)
       {:ok, response, _ctx} = Strider.call([
         %{role: :user, content: "Translate: Hello"},
         %{role: :assistant, content: "Hola"},
         %{role: :user, content: "Translate: Goodbye"}
-      ], model: "anthropic:claude-4-5-sonnet")
+      ], model: "anthropic:claude-sonnet-4-5")
 
       # Multi-modal content in messages (role + images)
       alias Strider.Content
@@ -88,7 +89,7 @@ defmodule Strider do
         %{role: :user, content: [Content.text("What's this?"), Content.image_url("https://example.com/cat.png")]},
         %{role: :assistant, content: "I see a cat."},
         %{role: :user, content: "What color is it?"}
-      ], model: "anthropic:claude-4-5-sonnet")
+      ], model: "anthropic:claude-sonnet-4-5")
 
       # With explicit agent (no context)
       agent = Strider.Agent.new({:mock, response: "Hello!"})
@@ -107,7 +108,11 @@ defmodule Strider do
 
   @spec call(term(), keyword()) :: {:ok, Response.t(), Context.t()} | {:error, term()}
   def call(content, opts) when is_list(opts) do
-    model = Keyword.fetch!(opts, :model)
+    model =
+      Keyword.get(opts, :model) ||
+        raise ArgumentError,
+              "model option is required, e.g. model: \"anthropic:claude-sonnet-4-5\""
+
     {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
     {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
     {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
@@ -142,7 +147,7 @@ defmodule Strider do
   ## Examples
 
       # Simple stream (no agent needed)
-      {:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-4-5-sonnet")
+      {:ok, stream, _ctx} = Strider.stream("Tell me a story", model: "anthropic:claude-sonnet-4-5")
       Enum.each(stream, fn chunk -> IO.write(chunk.content) end)
 
       # With explicit agent (no context)
@@ -162,7 +167,11 @@ defmodule Strider do
 
   @spec stream(term(), keyword()) :: {:ok, Enumerable.t(), Context.t()} | {:error, term()}
   def stream(content, opts) when is_list(opts) do
-    model = Keyword.fetch!(opts, :model)
+    model =
+      Keyword.get(opts, :model) ||
+        raise ArgumentError,
+              "model option is required, e.g. model: \"anthropic:claude-sonnet-4-5\""
+
     {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
     {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
     {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())

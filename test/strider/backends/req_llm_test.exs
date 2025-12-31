@@ -10,17 +10,25 @@ if Code.ensure_loaded?(ReqLLM) do
 
         assert function_exported?(ReqLLM, :call, 3)
         assert function_exported?(ReqLLM, :stream, 3)
-        assert function_exported?(ReqLLM, :introspect, 0)
+        assert function_exported?(ReqLLM, :introspect, 1)
       end
 
-      test "introspect returns backend info" do
-        info = ReqLLM.introspect()
+      test "introspect returns backend info from config" do
+        config = %{model: "anthropic:claude-sonnet-4-5"}
+        info = ReqLLM.introspect(config)
 
-        assert info.provider == "req_llm"
-        assert info.model == "dynamic"
+        assert info.provider == "anthropic"
+        assert info.model == "anthropic:claude-sonnet-4-5"
         assert info.operation == :chat
         assert :streaming in info.capabilities
         assert :multi_provider in info.capabilities
+      end
+
+      test "introspect handles missing model" do
+        info = ReqLLM.introspect(%{})
+
+        assert info.provider == "unknown"
+        assert info.model == "unknown"
       end
     end
   end

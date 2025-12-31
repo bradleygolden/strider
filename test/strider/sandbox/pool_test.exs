@@ -4,30 +4,10 @@ defmodule Strider.Sandbox.PoolTest do
   alias Strider.Sandbox.Adapters.Test, as: TestAdapter
   alias Strider.Sandbox.Pool
 
-  defmodule EventTracker do
-    def start do
-      if :ets.whereis(:pool_telemetry_events) != :undefined do
-        :ets.delete(:pool_telemetry_events)
-      end
-
-      :ets.new(:pool_telemetry_events, [:named_table, :public, :bag])
-    end
-
-    def record(event, measurements, metadata) do
-      :ets.insert(:pool_telemetry_events, {event, measurements, metadata})
-    end
-
-    def events, do: :ets.tab2list(:pool_telemetry_events)
-
-    def has_event?(event_name) do
-      events() |> Enum.any?(fn {event, _, _} -> event == event_name end)
-    end
-  end
-
   setup do
     start_supervised!(TestAdapter)
-    EventTracker.start()
 
+    table = :ets.new(:pool_telemetry_events, [:public, :bag])
     handler_id = "pool-test-handler-#{:erlang.unique_integer()}"
 
     :telemetry.attach_many(
@@ -40,14 +20,30 @@ defmodule Strider.Sandbox.PoolTest do
         [:strider, :pool, :create, :error]
       ],
       fn event, measurements, metadata, _config ->
-        EventTracker.record(event, measurements, metadata)
+        try do
+          :ets.insert(table, {event, measurements, metadata})
+        rescue
+          ArgumentError -> :ok
+        end
       end,
       nil
     )
 
-    on_exit(fn -> :telemetry.detach(handler_id) end)
+    on_exit(fn ->
+      :telemetry.detach(handler_id)
 
-    :ok
+      try do
+        :ets.delete(table)
+      rescue
+        ArgumentError -> :ok
+      end
+    end)
+
+    {:ok, events_table: table}
+  end
+
+  defp has_event?(table, event_name) do
+    :ets.tab2list(table) |> Enum.any?(fn {event, _, _} -> event == event_name end)
   end
 
   describe "start_link/2" do
@@ -119,22 +115,22 @@ defmodule Strider.Sandbox.PoolTest do
 
       wait_for_pool_size(pid, "ord", 1)
 
-      Process.sleep(10)
+      receive after: (10 -> :ok)
 
       assert {:cold, :pool_empty} = Pool.checkout(pid, "ord")
 
       GenServer.stop(pid)
     end
 
-    test "emits checkout telemetry events" do
+    test "emits checkout telemetry events", %{events_table: table} do
       config = build_config()
       {:ok, pid} = Pool.start_link(config)
 
       wait_for_pool_size(pid, "ord", 1)
       Pool.checkout(pid, "ord")
 
-      assert EventTracker.has_event?([:strider, :pool, :checkout, :start])
-      assert EventTracker.has_event?([:strider, :pool, :checkout, :stop])
+      assert has_event?(table, [:strider, :pool, :checkout, :start])
+      assert has_event?(table, [:strider, :pool, :checkout, :stop])
 
       GenServer.stop(pid)
     end
@@ -170,22 +166,23 @@ defmodule Strider.Sandbox.PoolTest do
       config = build_config()
       {:ok, pid} = Pool.start_link(config)
 
+      ref = Process.monitor(pid)
       send(pid, {:sandbox_failed, "ord", :test_error})
 
-      Process.sleep(10)
+      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 100
       assert Process.alive?(pid)
 
       GenServer.stop(pid)
     end
 
-    test "emits create telemetry events on success" do
+    test "emits create telemetry events on success", %{events_table: table} do
       config = build_config()
       {:ok, pid} = Pool.start_link(config)
 
       wait_for_pool_size(pid, "ord", 1)
 
-      assert EventTracker.has_event?([:strider, :pool, :create, :start])
-      assert EventTracker.has_event?([:strider, :pool, :create, :stop])
+      assert has_event?(table, [:strider, :pool, :create, :start])
+      assert has_event?(table, [:strider, :pool, :create, :stop])
 
       GenServer.stop(pid)
     end
@@ -297,8 +294,7 @@ defmodule Strider.Sandbox.PoolTest do
     if current_size >= target_size do
       :ok
     else
-      Process.sleep(50)
-      do_wait_for_pool_size(pid, partition, target_size, deadline)
+      receive after: (50 -> do_wait_for_pool_size(pid, partition, target_size, deadline))
     end
   end
 end

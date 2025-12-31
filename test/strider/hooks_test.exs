@@ -86,6 +86,24 @@ defmodule Strider.HooksTest do
     end
   end
 
+  defmodule PrefixHooks do
+    @behaviour Strider.Hooks
+
+    @impl true
+    def on_call_start(_agent, content, _context) do
+      {:cont, "[prefix] #{content}"}
+    end
+  end
+
+  defmodule SuffixHooks do
+    @behaviour Strider.Hooks
+
+    @impl true
+    def on_call_start(_agent, content, _context) do
+      {:cont, "#{content} [suffix]"}
+    end
+  end
+
   defmodule HaltingHooks do
     @behaviour Strider.Hooks
 
@@ -143,6 +161,16 @@ defmodule Strider.HooksTest do
       assert {:cont, "transformed: hello"} =
                Hooks.invoke(
                  TransformingHooks,
+                 :on_call_start,
+                 [:agent, "hello", :context],
+                 "hello"
+               )
+    end
+
+    test "chains transformations across multiple hooks" do
+      assert {:cont, "[prefix] hello [suffix]"} =
+               Hooks.invoke(
+                 [PrefixHooks, SuffixHooks],
                  :on_call_start,
                  [:agent, "hello", :context],
                  "hello"

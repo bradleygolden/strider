@@ -10,7 +10,6 @@ defmodule Strider.Backends.Mock do
   Options are passed as the second element of the backend tuple:
 
   - `:response` - The response to return (default: "Mock response")
-  - `:responses` - A list of responses to return in sequence
   - `:stream_chunks` - List of chunks for streaming (default: splits response)
   - `:delay` - Optional delay in milliseconds before responding
   - `:error` - If set, returns this error instead of a response
@@ -21,9 +20,6 @@ defmodule Strider.Backends.Mock do
 
       # Simple mock response
       agent = Strider.Agent.new({:mock, response: "Hello from mock!"})
-
-      # Sequence of responses
-      agent = Strider.Agent.new({:mock, responses: ["First", "Second", "Third"]})
 
       # Simulate an error
       agent = Strider.Agent.new({:mock, error: :rate_limited})
@@ -76,10 +72,11 @@ defmodule Strider.Backends.Mock do
   end
 
   @impl true
-  def introspect do
+  def introspect(config) do
     %{
-      name: "mock",
-      version: "1.0.0",
+      provider: "mock",
+      model: Map.get(config, :model, "mock"),
+      operation: :chat,
       capabilities: [:streaming, :deterministic]
     }
   end
@@ -109,13 +106,7 @@ defmodule Strider.Backends.Mock do
   defp estimate_tokens(content), do: content |> inspect() |> String.length()
 
   defp get_response_content(config) do
-    case Map.get(config, :responses) do
-      nil ->
-        Map.get(config, :response, "Mock response")
-
-      responses when is_list(responses) ->
-        List.first(responses)
-    end
+    Map.get(config, :response, "Mock response")
   end
 
   defp get_stream_chunks(config) do
