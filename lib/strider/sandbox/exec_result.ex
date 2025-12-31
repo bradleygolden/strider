@@ -39,4 +39,42 @@ defmodule Strider.Sandbox.ExecResult do
   def new(attrs \\ []) do
     struct(__MODULE__, attrs)
   end
+
+  @doc """
+  Returns true if the command executed successfully (exit code 0).
+
+  ## Examples
+
+      iex> result = Strider.Sandbox.ExecResult.new(exit_code: 0)
+      iex> Strider.Sandbox.ExecResult.success?(result)
+      true
+
+      iex> result = Strider.Sandbox.ExecResult.new(exit_code: 1)
+      iex> Strider.Sandbox.ExecResult.success?(result)
+      false
+
+  """
+  @spec success?(t()) :: boolean()
+  def success?(%__MODULE__{exit_code: 0}), do: true
+  def success?(%__MODULE__{}), do: false
+
+  @doc """
+  Returns the output (stdout if present, otherwise stderr).
+
+  Useful when you just want the command output regardless of stream.
+
+  ## Examples
+
+      iex> result = Strider.Sandbox.ExecResult.new(stdout: "hello", exit_code: 0)
+      iex> Strider.Sandbox.ExecResult.output(result)
+      "hello"
+
+      iex> result = Strider.Sandbox.ExecResult.new(stderr: "error message", exit_code: 1)
+      iex> Strider.Sandbox.ExecResult.output(result)
+      "error message"
+
+  """
+  @spec output(t()) :: String.t()
+  def output(%__MODULE__{stdout: stdout}) when stdout != "", do: stdout
+  def output(%__MODULE__{stderr: stderr}), do: stderr
 end

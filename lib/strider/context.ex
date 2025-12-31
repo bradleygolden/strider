@@ -143,4 +143,23 @@ defmodule Strider.Context do
   def get_metadata(%__MODULE__{metadata: metadata}, key, default \\ nil) do
     Map.get(metadata, key, default)
   end
+
+  @doc """
+  Clears all messages from the context, preserving metadata.
+
+  Useful for starting a fresh conversation while keeping session information.
+
+  ## Examples
+
+      iex> context = Strider.Context.new(metadata: %{session_id: "abc123"})
+      iex> context = Strider.Context.add_message(context, :user, "Hello!")
+      iex> context = Strider.Context.clear(context)
+      iex> {context.messages, context.metadata}
+      {[], %{session_id: "abc123"}}
+
+  """
+  @spec clear(t()) :: t()
+  def clear(%__MODULE__{} = context) do
+    %{context | messages: []}
+  end
 end
