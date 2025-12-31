@@ -59,6 +59,14 @@ defmodule Strider.Prompt do
 
         @impl true
         def eval(template, context), do: render(template, context)
+
+        @impl true
+        def eval!(template, context) do
+          case eval(template, context) do
+            {:ok, result} -> result
+            {:error, e} -> raise e
+          end
+        end
       end
 
   """
@@ -133,4 +141,15 @@ defmodule Strider.Prompt do
   """
   @callback eval(template :: String.t(), context :: context()) ::
               {:ok, String.t()} | {:error, error()}
+
+  @doc """
+  Parses and renders a template in one step, raising on error.
+
+  ## Examples
+
+      "Hello World!" = MyEngine.eval!("Hello {{ name }}!", %{name: "World"})
+      # Raises on invalid template or render error
+
+  """
+  @callback eval!(template :: String.t(), context :: context()) :: String.t()
 end
