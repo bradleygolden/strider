@@ -10,6 +10,17 @@ defmodule Strider.ContentTest do
   end
 
   describe "wrap/1" do
+    test "wraps strings as text parts" do
+      result = Content.wrap("Hello, world!")
+      assert [%Part{type: :text, text: "Hello, world!"}] = result
+    end
+
+    test "wraps list of parts unchanged" do
+      parts = [Content.text("Hi"), Content.image_url("https://example.com/img.png")]
+      result = Content.wrap(parts)
+      assert result == parts
+    end
+
     test "handles maps from structured output" do
       result = Content.wrap(%{"name" => "Test", "value" => 123})
       assert [%Part{type: :text, text: json}] = result
