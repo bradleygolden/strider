@@ -1,6 +1,6 @@
 defmodule Strider do
   @moduledoc """
-  Strider - An ultra-lean Elixir framework for building AI agents.
+  Strider - An AI agent framework for Elixir.
 
   ## Quick Start
 
@@ -33,6 +33,7 @@ defmodule Strider do
   ## Optional Packages
 
   - `:req_llm` - Multi-provider LLM backend (enables `Strider.Backends.ReqLLM`)
+  - `:solid` - Prompt templates with Liquid syntax (enables `Strider.Prompt.Solid`)
   - `:telemetry` - Telemetry integration for observability
   - `:zoi` - Schema validation for structured outputs
 

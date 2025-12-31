@@ -64,8 +64,7 @@ defmodule Strider.MixProject do
 
   defp description do
     """
-    An ultra-lean Elixir framework for building AI agents.
-    Struct-first API with provider abstraction, streaming support, and extensible hooks.
+    An AI agent framework for Elixir that simplifies the creation of AI agents within codebases.
     """
   end
 
