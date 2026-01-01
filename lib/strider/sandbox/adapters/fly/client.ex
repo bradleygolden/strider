@@ -121,6 +121,21 @@ if Code.ensure_loaded?(Req) do
     end
 
     @doc """
+    Lists all machines for a Fly app.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, [%{"id" => machine_id, "state" => state, "region" => region, ...}]}` on success
+    - `{:error, reason}` on failure
+    """
+    def list_machines(app_name, api_token) do
+      get("/apps/#{app_name}/machines", api_token)
+    end
+
+    @doc """
     Creates a new Fly app.
 
     ## Parameters
