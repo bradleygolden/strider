@@ -4,7 +4,7 @@ An AI agent framework for Elixir.
 
 ## Why?
 
-Agents are loops. A loop that calls an LLM, gets a response, and decides what to do next. Strider provides the primitives for building these loops.
+Agents are loops. A loop that calls an LLM, gets a response, and decides what to do next. Strider provides the primitives for building these loops and more.
 
 ## What Strider Does
 
