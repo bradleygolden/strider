@@ -175,6 +175,7 @@ defmodule Strider.Agent do
 
   defp resolve_backend_module(:mock), do: Strider.Backends.Mock
   defp resolve_backend_module(:req_llm), do: Strider.Backends.ReqLLM
+  defp resolve_backend_module(:baml), do: Strider.Backends.Baml
 
   defp resolve_backend_module(module) when is_atom(module) do
     # Check if it's a module (has module info) or unknown atom
