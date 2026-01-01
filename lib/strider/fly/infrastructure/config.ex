@@ -77,7 +77,13 @@ if Code.ensure_loaded?(Toml) do
             enabled: boolean(),
             app_name: String.t() | nil,
             port: pos_integer(),
-            allowed_domains: [String.t()]
+            allowed_domains: [String.t()],
+            image: String.t(),
+            memory_mb: pos_integer(),
+            cpu: pos_integer(),
+            cpu_kind: String.t(),
+            region: String.t() | nil,
+            required_secrets: [String.t()]
           }
 
     defstruct [:fly, :app, :network, :volumes, :sandbox, :proxy]
@@ -271,34 +277,97 @@ if Code.ensure_loaded?(Toml) do
       end
     end
 
-    defp validate_proxy(nil),
-      do: {:ok, %{enabled: false, app_name: nil, port: 4000, allowed_domains: []}}
+    @default_proxy_image "ghcr.io/bradleygolden/strider-proxy:latest"
+
+    defp validate_proxy(nil) do
+      {:ok,
+       %{
+         enabled: false,
+         app_name: nil,
+         port: 4000,
+         allowed_domains: [],
+         image: @default_proxy_image,
+         memory_mb: 256,
+         cpu: 1,
+         cpu_kind: "shared",
+         region: nil,
+         required_secrets: []
+       }}
+    end
 
     defp validate_proxy(proxy) do
-      enabled = Map.get(proxy, "enabled", false)
-      app_name = Map.get(proxy, "app_name")
-      port = Map.get(proxy, "port", 4000)
-      allowed_domains = Map.get(proxy, "allowed_domains", [])
+      config = %{
+        enabled: Map.get(proxy, "enabled", false),
+        app_name: Map.get(proxy, "app_name"),
+        port: Map.get(proxy, "port", 4000),
+        allowed_domains: Map.get(proxy, "allowed_domains", []),
+        image: Map.get(proxy, "image", @default_proxy_image),
+        memory_mb: Map.get(proxy, "memory_mb", 256),
+        cpu: Map.get(proxy, "cpu", 1),
+        cpu_kind: Map.get(proxy, "cpu_kind", "shared"),
+        region: Map.get(proxy, "region"),
+        required_secrets: Map.get(proxy, "required_secrets", [])
+      }
 
-      cond do
-        enabled and is_nil(app_name) ->
-          {:error, {:invalid_field, "proxy.app_name", "required when proxy.enabled is true"}}
-
-        not is_integer(port) or port < 1 or port > 65_535 ->
-          {:error, {:invalid_field, "proxy.port", "must be a valid port number"}}
-
-        not is_list(allowed_domains) or not Enum.all?(allowed_domains, &is_binary/1) ->
-          {:error, {:invalid_field, "proxy.allowed_domains", "must be a list of strings"}}
-
-        true ->
-          {:ok,
-           %{
-             enabled: enabled,
-             app_name: app_name,
-             port: port,
-             allowed_domains: allowed_domains
-           }}
+      with :ok <- validate_proxy_app_name(config),
+           :ok <- validate_proxy_port(config.port),
+           :ok <- validate_string_list(config.allowed_domains, "proxy.allowed_domains"),
+           :ok <- validate_proxy_image(config.image),
+           :ok <- validate_memory_mb(config.memory_mb, "proxy"),
+           :ok <- validate_cpu(config.cpu, "proxy"),
+           :ok <- validate_cpu_kind(config.cpu_kind, "proxy"),
+           :ok <- validate_string_list(config.required_secrets, "proxy.required_secrets") do
+        {:ok, config}
       end
+    end
+
+    defp validate_proxy_app_name(%{enabled: true, app_name: nil}) do
+      {:error, {:invalid_field, "proxy.app_name", "required when proxy.enabled is true"}}
+    end
+
+    defp validate_proxy_app_name(_), do: :ok
+
+    defp validate_proxy_port(port) when is_integer(port) and port >= 1 and port <= 65_535, do: :ok
+
+    defp validate_proxy_port(_) do
+      {:error, {:invalid_field, "proxy.port", "must be a valid port number"}}
+    end
+
+    defp validate_proxy_image(image) when is_binary(image) and image != "", do: :ok
+
+    defp validate_proxy_image(_) do
+      {:error, {:invalid_field, "proxy.image", "must be a non-empty string"}}
+    end
+
+    defp validate_string_list(list, field) when is_list(list) do
+      if Enum.all?(list, &is_binary/1) do
+        :ok
+      else
+        {:error, {:invalid_field, field, "must be a list of strings"}}
+      end
+    end
+
+    defp validate_string_list(_, field) do
+      {:error, {:invalid_field, field, "must be a list of strings"}}
+    end
+
+    defp validate_memory_mb(memory_mb, _section) when is_integer(memory_mb) and memory_mb >= 256,
+      do: :ok
+
+    defp validate_memory_mb(_, section) do
+      {:error, {:invalid_field, "#{section}.memory_mb", "must be at least 256"}}
+    end
+
+    defp validate_cpu(cpu, _section) when is_integer(cpu) and cpu >= 1, do: :ok
+
+    defp validate_cpu(_, section) do
+      {:error, {:invalid_field, "#{section}.cpu", "must be a positive integer"}}
+    end
+
+    defp validate_cpu_kind(cpu_kind, _section) when cpu_kind in ["shared", "performance"], do: :ok
+
+    defp validate_cpu_kind(_, section) do
+      {:error, {:invalid_field, "#{section}.cpu_kind", "must be 'shared' or 'performance'"}}
     end
 
     defp require_field(map, field, section) do
@@ -382,6 +451,20 @@ if Code.ensure_loaded?(Toml) do
 
       # Allowed external domains
       # allowed_domains = ["api.anthropic.com", "api.github.com"]
+
+      # Proxy Docker image (defaults to strider-proxy)
+      # image = "ghcr.io/bradleygolden/strider-proxy:latest"
+
+      # Proxy resource allocation
+      # memory_mb = 256
+      # cpu = 1
+      # cpu_kind = "shared"
+
+      # Region for proxy (defaults to first app region)
+      # region = "sjc"
+
+      # Secrets that must be set before deployment
+      # required_secrets = ["ANTHROPIC_API_KEY"]
       """
     end
 

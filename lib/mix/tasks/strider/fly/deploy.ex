@@ -51,6 +51,7 @@ if Code.ensure_loaded?(Toml) and Code.ensure_loaded?(Req) do
            {:ok, _result} <- execute_plan(plan, api_token) do
         Mix.shell().info("")
         Mix.shell().info("Infrastructure deployed successfully!")
+        display_proxy_info(config)
       else
         :cancelled ->
           Mix.shell().info("Deployment cancelled.")
@@ -149,5 +150,23 @@ if Code.ensure_loaded?(Toml) and Code.ensure_loaded?(Req) do
     defp action_symbol(:create), do: "+"
     defp action_symbol(:update), do: "~"
     defp action_symbol(:delete), do: "-"
+
+    defp display_proxy_info(%{proxy: %{enabled: true, app_name: app_name, port: port}}) do
+      Mix.shell().info("")
+      Mix.shell().info("Proxy Configuration:")
+      Mix.shell().info("  Internal address: #{app_name}.internal:#{port}")
+      Mix.shell().info("")
+      Mix.shell().info("  Configure sandboxes with:")
+
+      Mix.shell().info(
+        "    ANTHROPIC_BASE_URL=http://#{app_name}.internal:#{port}/https://api.anthropic.com"
+      )
+
+      Mix.shell().info("")
+      Mix.shell().info("  Set secrets with:")
+      Mix.shell().info("    fly secrets set ANTHROPIC_API_KEY=sk-xxx -a #{app_name}")
+    end
+
+    defp display_proxy_info(_config), do: :ok
   end
 end

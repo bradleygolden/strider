@@ -192,6 +192,120 @@ if Code.ensure_loaded?(Req) do
       end
     end
 
+    @doc """
+    Creates a new Fly machine.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `config` - Machine configuration map with keys like:
+      - `:image` - Docker image to run
+      - `:env` - Environment variables map
+      - `:guest` - Guest config %{memory_mb: int, cpus: int, cpu_kind: string}
+      - `:services` - List of service configs for ports
+      - `:auto_destroy` - Whether to auto-destroy on exit
+      - `:restart` - Restart policy
+    - `region` - Region to deploy to (nil uses Fly's default)
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, %{"id" => machine_id, "state" => state, ...}}` on success
+    - `{:error, reason}` on failure
+    """
+    def create_machine(app_name, config, region, api_token) do
+      body = %{config: config}
+      body = if region, do: Map.put(body, :region, region), else: body
+      post("/apps/#{app_name}/machines", body, api_token)
+    end
+
+    @doc """
+    Waits for a machine to reach a specific state.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `machine_id` - The machine ID to wait for
+    - `target_state` - The state to wait for (e.g., "started", "stopped")
+    - `api_token` - Fly API token
+    - `opts` - Options:
+      - `:timeout` - Timeout in milliseconds (default: 60_000)
+
+    ## Returns
+    - `:ok` when machine reaches target state
+    - `{:error, :timeout}` if timeout is reached
+    - `{:error, reason}` on failure
+    """
+    def wait_for_machine(app_name, machine_id, target_state, api_token, opts \\ []) do
+      timeout = Keyword.get(opts, :timeout, 60_000)
+      # Fly's wait endpoint blocks until state is reached or timeout
+      path =
+        "/apps/#{app_name}/machines/#{machine_id}/wait?state=#{target_state}&timeout=#{timeout}"
+
+      case get(path, api_token) do
+        {:ok, _} -> :ok
+        error -> error
+      end
+    end
+
+    @graphql_url "https://api.fly.io/graphql"
+
+    @doc """
+    Lists secret names for a Fly app using the GraphQL API.
+
+    Note: This only returns secret names, not values. Values are only
+    accessible as environment variables inside running machines.
+
+    ## Parameters
+    - `app_name` - The Fly app name
+    - `api_token` - Fly API token
+
+    ## Returns
+    - `{:ok, ["SECRET_NAME_1", "SECRET_NAME_2", ...]}` on success
+    - `{:error, reason}` on failure
+    """
+    def list_secrets(app_name, api_token) do
+      query = """
+      query($appName: String!) {
+        app(name: $appName) {
+          secrets {
+            name
+          }
+        }
+      }
+      """
+
+      body = %{query: query, variables: %{appName: app_name}}
+      :ok = RateLimiter.acquire(:read)
+
+      req =
+        Req.new(
+          method: :post,
+          url: @graphql_url,
+          headers: [
+            {"authorization", "Bearer #{api_token}"},
+            {"content-type", "application/json"}
+          ],
+          json: body,
+          receive_timeout: 30_000
+        )
+
+      case Req.request(req) do
+        {:ok, %{status: 200, body: %{"data" => %{"app" => %{"secrets" => secrets}}}}} ->
+          names = Enum.map(secrets, & &1["name"])
+          {:ok, names}
+
+        {:ok, %{status: 200, body: %{"data" => %{"app" => nil}}}} ->
+          {:error, :not_found}
+
+        {:ok, %{status: 200, body: %{"errors" => [%{"message" => message} | _]}}} ->
+          {:error, {:graphql_error, message}}
+
+        {:ok, %{status: status, body: body}} when status >= 400 ->
+          {:error, {:api_error, status, extract_error(body)}}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+
     defp request(method, path, body, api_token, retry_count \\ 0) do
       url = @base_url <> path
 

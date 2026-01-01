@@ -14,7 +14,7 @@ if Code.ensure_loaded?(Toml) do
 
     @type change :: %{
             action: action(),
-            resource_type: :app | :network | :volume | :proxy,
+            resource_type: :app | :network | :volume | :proxy | :proxy_machine,
             resource_id: String.t(),
             description: String.t(),
             details: map()
@@ -44,6 +44,7 @@ if Code.ensure_loaded?(Toml) do
         |> add_app_changes(config, state)
         |> add_volume_changes(config, state)
         |> add_proxy_changes(config, state)
+        |> add_proxy_machine_changes(config, state)
 
       %__MODULE__{
         changes: changes,
@@ -184,6 +185,8 @@ if Code.ensure_loaded?(Toml) do
 
     defp add_proxy_changes(changes, config, state) do
       if config.proxy.enabled and not state.proxy_app.exists do
+        network = if config.network.enabled, do: config.network.name, else: nil
+
         change = %{
           action: :create,
           resource_type: :proxy,
@@ -192,8 +195,39 @@ if Code.ensure_loaded?(Toml) do
           details: %{
             name: config.proxy.app_name,
             org: config.fly.org,
+            network: network,
             port: config.proxy.port,
             allowed_domains: config.proxy.allowed_domains
+          }
+        }
+
+        changes ++ [change]
+      else
+        changes
+      end
+    end
+
+    defp add_proxy_machine_changes(changes, config, state) do
+      needs_machine = config.proxy.enabled and is_nil(state.proxy_app.machine_id)
+
+      if needs_machine do
+        region = config.proxy.region || List.first(config.app.regions)
+
+        change = %{
+          action: :create,
+          resource_type: :proxy_machine,
+          resource_id: "#{config.proxy.app_name}-machine",
+          description: "Deploy proxy machine in #{region}",
+          details: %{
+            app_name: config.proxy.app_name,
+            image: config.proxy.image,
+            region: region,
+            port: config.proxy.port,
+            memory_mb: config.proxy.memory_mb,
+            cpu: config.proxy.cpu,
+            cpu_kind: config.proxy.cpu_kind,
+            allowed_domains: config.proxy.allowed_domains,
+            required_secrets: config.proxy.required_secrets
           }
         }
 

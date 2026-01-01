@@ -65,7 +65,8 @@ if Code.ensure_loaded?(Req) do
         network: 2,
         volume: 3,
         proxy: 4,
-        machine: 5
+        proxy_machine: 5,
+        machine: 6
       }
 
       Enum.sort_by(changes, fn change ->
@@ -101,10 +102,22 @@ if Code.ensure_loaded?(Req) do
     end
 
     defp execute_change(%{action: :create, resource_type: :proxy, details: details}, api_token) do
-      case Client.create_app(details.name, details.org, nil, api_token) do
+      case Client.create_app(details.name, details.org, details.network, api_token) do
         {:ok, _} -> :ok
         {:error, {:api_error, 422, _}} -> :ok
         {:error, reason} -> {:error, reason}
+      end
+    end
+
+    defp execute_change(
+           %{action: :create, resource_type: :proxy_machine, details: details},
+           api_token
+         ) do
+      config = build_proxy_machine_config(details)
+
+      with {:ok, machine} <-
+             Client.create_machine(details.app_name, config, details.region, api_token) do
+        Client.wait_for_machine(details.app_name, machine["id"], "started", api_token)
       end
     end
 
@@ -146,6 +159,30 @@ if Code.ensure_loaded?(Req) do
         {:error, :not_found} -> :ok
         {:error, reason} -> {:error, reason}
       end
+    end
+
+    defp build_proxy_machine_config(details) do
+      %{
+        image: details.image,
+        env: %{
+          "PROXY_PORT" => to_string(details.port),
+          "ALLOWED_DOMAINS" => Enum.join(details.allowed_domains, ",")
+        },
+        guest: %{
+          memory_mb: details.memory_mb,
+          cpus: details.cpu,
+          cpu_kind: details.cpu_kind
+        },
+        services: [
+          %{
+            ports: [%{port: details.port, handlers: ["http"]}],
+            protocol: "tcp",
+            internal_port: details.port
+          }
+        ],
+        auto_destroy: false,
+        restart: %{policy: "always"}
+      }
     end
   end
 end

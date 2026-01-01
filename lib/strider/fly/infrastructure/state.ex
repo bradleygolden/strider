@@ -11,7 +11,7 @@ if Code.ensure_loaded?(Req) do
 
     @type t :: %__MODULE__{
             sandbox_app: app_state(),
-            proxy_app: app_state(),
+            proxy_app: proxy_app_state(),
             volumes: %{String.t() => [volume_state()]},
             machines: [machine_state()]
           }
@@ -21,6 +21,16 @@ if Code.ensure_loaded?(Req) do
             name: String.t() | nil,
             organization: String.t() | nil,
             network: String.t() | nil
+          }
+
+    @type proxy_app_state :: %{
+            exists: boolean(),
+            name: String.t() | nil,
+            organization: String.t() | nil,
+            network: String.t() | nil,
+            machine_id: String.t() | nil,
+            machine_state: String.t() | nil,
+            secrets: [String.t()]
           }
 
     @type volume_state :: %{
@@ -39,7 +49,15 @@ if Code.ensure_loaded?(Req) do
           }
 
     defstruct sandbox_app: %{exists: false, name: nil, organization: nil, network: nil},
-              proxy_app: %{exists: false, name: nil, organization: nil, network: nil},
+              proxy_app: %{
+                exists: false,
+                name: nil,
+                organization: nil,
+                network: nil,
+                machine_id: nil,
+                machine_state: nil,
+                secrets: []
+              },
               volumes: %{},
               machines: []
 
@@ -92,7 +110,14 @@ if Code.ensure_loaded?(Req) do
 
       lines =
         if state.proxy_app.exists do
-          lines ++ ["Proxy App: #{state.proxy_app.name}"]
+          machine_info =
+            if state.proxy_app.machine_id do
+              " (machine: #{state.proxy_app.machine_state})"
+            else
+              " (no machine)"
+            end
+
+          lines ++ ["Proxy App: #{state.proxy_app.name}#{machine_info}"]
         else
           lines ++ ["Proxy App: not deployed"]
         end
@@ -127,25 +152,68 @@ if Code.ensure_loaded?(Req) do
     end
 
     defp fetch_proxy_state(config, api_token) do
+      default_state = %{
+        exists: false,
+        name: nil,
+        organization: nil,
+        network: nil,
+        machine_id: nil,
+        machine_state: nil,
+        secrets: []
+      }
+
       if config.proxy.enabled and config.proxy.app_name do
         case Client.get_app(config.proxy.app_name, api_token) do
           {:ok, app} ->
-            {:ok,
-             %{
-               exists: true,
-               name: app["name"],
-               organization: get_in(app, ["organization", "slug"]),
-               network: app["network"]
-             }}
+            with {:ok, machine_info} <-
+                   fetch_proxy_machine(config.proxy.app_name, api_token),
+                 {:ok, secrets} <- fetch_proxy_secrets(config.proxy.app_name, api_token) do
+              {:ok,
+               %{
+                 exists: true,
+                 name: app["name"],
+                 organization: get_in(app, ["organization", "slug"]),
+                 network: app["network"],
+                 machine_id: machine_info.id,
+                 machine_state: machine_info.state,
+                 secrets: secrets
+               }}
+            end
 
           {:error, :not_found} ->
-            {:ok, %{exists: false, name: nil, organization: nil, network: nil}}
+            {:ok, default_state}
 
           {:error, reason} ->
             {:error, {:api_error, :proxy_app, reason}}
         end
       else
-        {:ok, %{exists: false, name: nil, organization: nil, network: nil}}
+        {:ok, default_state}
+      end
+    end
+
+    defp fetch_proxy_machine(app_name, api_token) do
+      case Client.list_machines(app_name, api_token) do
+        {:ok, []} ->
+          {:ok, %{id: nil, state: nil}}
+
+        {:ok, [machine | _]} ->
+          {:ok, %{id: machine["id"], state: machine["state"]}}
+
+        {:error, reason} ->
+          {:error, {:api_error, :proxy_machine, reason}}
+      end
+    end
+
+    defp fetch_proxy_secrets(app_name, api_token) do
+      case Client.list_secrets(app_name, api_token) do
+        {:ok, secrets} ->
+          {:ok, secrets}
+
+        {:error, :not_found} ->
+          {:ok, []}
+
+        {:error, reason} ->
+          {:error, {:api_error, :proxy_secrets, reason}}
       end
     end
 
