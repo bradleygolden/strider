@@ -1,33 +1,17 @@
 if Code.ensure_loaded?(BamlElixir.Client) do
   defmodule Strider.Backends.BamlIntegrationTest do
-    @moduledoc """
-    Integration tests for the BAML backend using Ollama.
-
-    These tests require Ollama to be running locally with the qwen2:1.5b model.
-
-    To run:
-        # Start Ollama
-        ollama serve
-
-        # Pull the model (if not already available)
-        ollama pull qwen2:1.5b
-
-        # Run integration tests
-        mix test --include baml
-    """
+    @moduledoc false
 
     use ExUnit.Case, async: false
 
     @moduletag :integration
     @moduletag :baml
 
-    # Define a module that uses BamlElixir.Client to load test BAML definitions
     defmodule TestBaml do
       use BamlElixir.Client, path: "test/support/baml_src"
     end
 
     setup do
-      # Verify Ollama is running before each test
       case check_ollama_available() do
         :ok ->
           :ok
@@ -81,7 +65,6 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       end
 
       test "call/2 with structured output function returns struct when prefix provided" do
-        # Pass prefix so BAML knows where to find the struct definitions
         agent =
           Strider.Agent.new(
             {:baml, function: "ExtractPerson", path: "test/support/baml_src", prefix: TestBaml}
@@ -132,13 +115,11 @@ if Code.ensure_loaded?(BamlElixir.Client) do
         chunks = Enum.to_list(stream)
 
         assert not Enum.empty?(chunks)
-        # Last chunk should have the complete result
         last_chunk = List.last(chunks)
         assert last_chunk.metadata.partial == false
       end
     end
 
-    # Helper to check if Ollama is available
     defp check_ollama_available do
       url = "http://localhost:11434/api/tags"
 

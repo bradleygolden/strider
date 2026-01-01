@@ -28,13 +28,14 @@ Tool execution isn't built in. Strider parses tool calls from LLM responses (via
 def deps do
   [
     {:strider, github: "bradleygolden/strider", ref: "663c2d7"},
-    {:ecto_sql, "~> 3.0"},   # optional, for Strider.Sandbox.Pool.Store.Postgres
-    {:plug, "~> 1.15"},      # optional, for Strider.Proxy.Sandbox
-    {:req, "~> 0.5"},        # optional, for Strider.Sandbox.Adapters.Fly
-    {:req_llm, "~> 1.0"},    # optional, for Strider.Backends.ReqLLM
-    {:solid, "~> 0.15"},     # optional, for Strider.Prompt.Solid
-    {:telemetry, "~> 1.2"},  # optional, for Strider.Telemetry
-    {:zoi, "~> 0.7"}         # optional, for Strider.Schema.Zoi
+    {:baml_elixir, "~> 0.1"}, # optional, for Strider.Backends.Baml
+    {:ecto_sql, "~> 3.0"},    # optional, for Strider.Sandbox.Pool.Store.Postgres
+    {:plug, "~> 1.15"},       # optional, for Strider.Proxy.Sandbox
+    {:req, "~> 0.5"},         # optional, for Strider.Sandbox.Adapters.Fly
+    {:req_llm, "~> 1.0"},     # optional, for Strider.Backends.ReqLLM
+    {:solid, "~> 0.15"},      # optional, for Strider.Prompt.Solid
+    {:telemetry, "~> 1.2"},   # optional, for Strider.Telemetry
+    {:zoi, "~> 0.7"}          # optional, for Strider.Schema.Zoi
   ]
 end
 ```
@@ -265,6 +266,59 @@ schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
 {:ok, result} = Schema.parse(schema, %{name: "Alice", age: 30})
 ```
 
+## BAML (Structured LLM Functions)
+
+[BAML](https://docs.boundaryml.com/) provides type-safe, schema-driven LLM function calls defined in `.baml` files.
+
+Define functions in a `.baml` file:
+
+```baml
+class Person {
+  name string
+  age int?
+}
+
+function ExtractPerson(text: string) -> Person {
+  client MyLLM
+  prompt #"Extract person info from: {{ text }}"#
+}
+```
+
+Call via Strider:
+
+```elixir
+agent = Strider.Agent.new({:baml, function: "ExtractPerson", path: "priv/baml_src"})
+{:ok, response, _ctx} = Strider.call(agent, "John is 30 years old")
+# response.content => %{name: "John", age: 30}
+```
+
+For typed structs, pass the `:prefix` option pointing to your BAML client module:
+
+```elixir
+defmodule MyApp.Baml do
+  use BamlElixir.Client, path: "priv/baml_src"
+end
+
+agent = Strider.Agent.new({:baml, function: "ExtractPerson", path: "priv/baml_src", prefix: MyApp.Baml})
+{:ok, response, _ctx} = Strider.call(agent, "Alice is 25")
+# response.content => %MyApp.Baml.Person{name: "Alice", age: 25}
+```
+
+### Structured Inputs
+
+BAML supports classes, arrays, maps, and unions as function parameters. Use `:args_format` and `:args` to pass structured data:
+
+```elixir
+agent = Strider.Agent.new({:baml,
+  function: "EvaluateCar",
+  path: "priv/baml_src",
+  args_format: :raw,
+  args: %{car: %{make: "Toyota", model: "Camry", year: 2024}}
+})
+```
+
+See `Strider.Backends.Baml` moduledoc for full options.
+
 ## Sandbox Execution
 
 Sandboxes provide isolated code execution with **no network access by default**.
@@ -379,6 +433,7 @@ Sandboxes send requests with the target URL in the path: `POST http://proxy:4000
 ## Backends
 
 - `Strider.Backends.ReqLLM` - Multi-provider backend via [ReqLLM](https://github.com/bradleygolden/req_llm) (requires `{:req_llm, "~> 1.0"}`)
+- `Strider.Backends.Baml` - Type-safe structured LLM calls via [BAML](https://docs.boundaryml.com/) (requires `{:baml_elixir, "~> 0.1"}`)
 - `Strider.Backends.Mock` - For testing
 
 Write your own by implementing `Strider.Backend`.

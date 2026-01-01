@@ -1,5 +1,3 @@
-// Test functions for BAML integration tests
-
 class Person {
   name string
   age int?

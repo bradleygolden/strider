@@ -1,6 +1,3 @@
-// Ollama client configuration for integration tests
-// Uses the OpenAI-compatible endpoint
-
 client<llm> Ollama {
   provider "openai-generic"
   options {
