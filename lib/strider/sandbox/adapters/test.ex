@@ -39,17 +39,49 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @doc """
   Starts the test adapter agent.
+
+  ## Options
+
+    * `:name` - The name to register the agent under. Defaults to `__MODULE__`.
+      Use a unique name per test when running with `async: true`.
   """
-  def start_link(_opts \\ []) do
-    Agent.start_link(fn -> %{sandboxes: %{}, responses: %{}} end, name: __MODULE__)
+  def start_link(opts \\ []) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    ensure_ets_table()
+    Agent.start_link(fn -> %{sandboxes: %{}, responses: %{}} end, name: name)
+  end
+
+  defp ensure_ets_table do
+    if :ets.whereis(__MODULE__) == :undefined do
+      :ets.new(__MODULE__, [:named_table, :public, :set])
+    end
+  rescue
+    ArgumentError -> :ok
+  end
+
+  defp get_agent_name(sandbox_id) do
+    case :ets.whereis(__MODULE__) do
+      :undefined -> __MODULE__
+      _table -> :ets.lookup_element(__MODULE__, sandbox_id, 2, __MODULE__)
+    end
+  end
+
+  defp register_sandbox(sandbox_id, agent_name) do
+    :ets.insert(__MODULE__, {sandbox_id, agent_name})
   end
 
   @doc """
   Sets a mock response for a specific command in a sandbox.
   """
-  @spec set_exec_response(String.t(), String.t(), {:ok, ExecResult.t()} | {:error, term()}) :: :ok
-  def set_exec_response(sandbox_id, command, response) do
-    Agent.update(__MODULE__, fn state ->
+  @spec set_exec_response(
+          String.t(),
+          String.t(),
+          {:ok, ExecResult.t()} | {:error, term()},
+          atom()
+        ) ::
+          :ok
+  def set_exec_response(sandbox_id, command, response, name \\ __MODULE__) do
+    Agent.update(name, fn state ->
       put_in(state, [:responses, {sandbox_id, command}], response)
     end)
   end
@@ -57,9 +89,9 @@ defmodule Strider.Sandbox.Adapters.Test do
   @doc """
   Gets the command execution history for a sandbox.
   """
-  @spec get_exec_history(String.t()) :: [String.t()]
-  def get_exec_history(sandbox_id) do
-    Agent.get(__MODULE__, fn state ->
+  @spec get_exec_history(String.t(), atom()) :: [String.t()]
+  def get_exec_history(sandbox_id, name \\ __MODULE__) do
+    Agent.get(name, fn state ->
       get_in(state, [:sandboxes, sandbox_id, :history]) || []
     end)
   end
@@ -67,9 +99,9 @@ defmodule Strider.Sandbox.Adapters.Test do
   @doc """
   Gets the config for a sandbox.
   """
-  @spec get_config(String.t()) :: map() | nil
-  def get_config(sandbox_id) do
-    Agent.get(__MODULE__, fn state ->
+  @spec get_config(String.t(), atom()) :: map() | nil
+  def get_config(sandbox_id, name \\ __MODULE__) do
+    Agent.get(name, fn state ->
       get_in(state, [:sandboxes, sandbox_id, :config])
     end)
   end
@@ -79,8 +111,10 @@ defmodule Strider.Sandbox.Adapters.Test do
   @impl true
   def create(config) do
     id = "test-sandbox-#{System.unique_integer([:positive])}"
+    agent_name = Map.get(config, :agent_name, __MODULE__)
+    register_sandbox(id, agent_name)
 
-    Agent.update(__MODULE__, fn state ->
+    Agent.update(agent_name, fn state ->
       put_in(state, [:sandboxes, id], %{config: config, status: :running, history: []})
     end)
 
@@ -89,7 +123,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def exec(sandbox_id, command, _opts) do
-    Agent.get_and_update(__MODULE__, fn state ->
+    agent_name = get_agent_name(sandbox_id)
+
+    Agent.get_and_update(agent_name, fn state ->
       state = update_in(state, [:sandboxes, sandbox_id, :history], &[command | &1 || []])
 
       response =
@@ -102,7 +138,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def terminate(sandbox_id, _opts \\ []) do
-    Agent.update(__MODULE__, fn state ->
+    agent_name = get_agent_name(sandbox_id)
+
+    Agent.update(agent_name, fn state ->
       put_in(state, [:sandboxes, sandbox_id, :status], :terminated)
     end)
 
@@ -111,7 +149,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def status(sandbox_id, _opts \\ []) do
-    Agent.get(__MODULE__, fn state ->
+    agent_name = get_agent_name(sandbox_id)
+
+    Agent.get(agent_name, fn state ->
       get_in(state, [:sandboxes, sandbox_id, :status]) || :unknown
     end)
   end
@@ -123,7 +163,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def read_file(sandbox_id, path, _opts) do
-    Agent.get(__MODULE__, fn state ->
+    agent_name = get_agent_name(sandbox_id)
+
+    Agent.get(agent_name, fn state ->
       case get_in(state, [:sandboxes, sandbox_id, :files, path]) do
         nil -> {:error, :file_not_found}
         content -> {:ok, content}
@@ -133,7 +175,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def write_file(sandbox_id, path, content, _opts) do
-    Agent.update(__MODULE__, fn state ->
+    agent_name = get_agent_name(sandbox_id)
+
+    Agent.update(agent_name, fn state ->
       update_in(state, [:sandboxes, sandbox_id, :files], fn files ->
         Map.put(files || %{}, path, content)
       end)
@@ -142,7 +186,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def write_files(sandbox_id, files, _opts) do
-    Agent.update(__MODULE__, fn state ->
+    agent_name = get_agent_name(sandbox_id)
+
+    Agent.update(agent_name, fn state ->
       update_in(state, [:sandboxes, sandbox_id, :files], fn existing ->
         Map.merge(existing || %{}, Map.new(files))
       end)
@@ -161,7 +207,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def stop(sandbox_id, _opts \\ []) do
-    case update_sandbox(sandbox_id, [:status], :stopped) do
+    agent_name = get_agent_name(sandbox_id)
+
+    case update_sandbox(agent_name, sandbox_id, [:status], :stopped) do
       :ok -> {:ok, %{}}
       {:error, reason} -> {:error, reason}
     end
@@ -169,7 +217,9 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def start(sandbox_id, _opts \\ []) do
-    case update_sandbox(sandbox_id, [:status], :running) do
+    agent_name = get_agent_name(sandbox_id)
+
+    case update_sandbox(agent_name, sandbox_id, [:status], :running) do
       :ok -> {:ok, %{}}
       {:error, reason} -> {:error, reason}
     end
@@ -177,20 +227,22 @@ defmodule Strider.Sandbox.Adapters.Test do
 
   @impl true
   def update(sandbox_id, config, _opts \\ []) do
-    case update_sandbox(sandbox_id, [:config], config) do
+    agent_name = get_agent_name(sandbox_id)
+
+    case update_sandbox(agent_name, sandbox_id, [:config], config) do
       :ok -> {:ok, %{}}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp update_sandbox(sandbox_id, path, value) do
-    case Process.whereis(__MODULE__) do
+  defp update_sandbox(agent_name, sandbox_id, path, value) do
+    case Process.whereis(agent_name) do
       nil ->
         {:error, :agent_not_running}
 
       _pid ->
         try do
-          Agent.update(__MODULE__, &update_sandbox_state(&1, sandbox_id, path, value))
+          Agent.update(agent_name, &update_sandbox_state(&1, sandbox_id, path, value))
         catch
           :exit, _ -> {:error, :agent_not_running}
         end

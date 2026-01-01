@@ -7,44 +7,47 @@ defmodule Strider.Sandbox.TemplateTest do
   alias Strider.Sandbox.Template
 
   setup do
-    start_supervised!(TestAdapter)
-    :ok
+    name = :"test_adapter_#{System.unique_integer([:positive])}"
+    start_supervised!({TestAdapter, name: name})
+    {:ok, agent_name: name}
   end
 
   describe "new/1" do
-    test "creates template with keyword syntax" do
+    test "creates template with keyword syntax", %{agent_name: agent_name} do
       template =
         Template.new(
           adapter: TestAdapter,
-          config: %{image: "alpine", memory_mb: 256}
+          config: %{agent_name: agent_name, image: "alpine", memory_mb: 256}
         )
 
       assert template.adapter == TestAdapter
-      assert template.config == %{image: "alpine", memory_mb: 256}
+      assert template.config == %{agent_name: agent_name, image: "alpine", memory_mb: 256}
     end
 
-    test "creates template with tuple syntax (map config)" do
-      template = Template.new({TestAdapter, %{image: "alpine", memory_mb: 256}})
+    test "creates template with tuple syntax (map config)", %{agent_name: agent_name} do
+      template =
+        Template.new({TestAdapter, %{agent_name: agent_name, image: "alpine", memory_mb: 256}})
 
       assert template.adapter == TestAdapter
-      assert template.config == %{image: "alpine", memory_mb: 256}
+      assert template.config == %{agent_name: agent_name, image: "alpine", memory_mb: 256}
     end
 
-    test "creates template with tuple syntax (keyword config)" do
-      template = Template.new({TestAdapter, image: "alpine", memory_mb: 256})
+    test "creates template with tuple syntax (keyword config)", %{agent_name: agent_name} do
+      template =
+        Template.new({TestAdapter, agent_name: agent_name, image: "alpine", memory_mb: 256})
 
       assert template.adapter == TestAdapter
-      assert template.config == %{image: "alpine", memory_mb: 256}
+      assert template.config == %{agent_name: agent_name, image: "alpine", memory_mb: 256}
     end
 
-    test "normalizes keyword list config to map" do
+    test "normalizes keyword list config to map", %{agent_name: agent_name} do
       template =
         Template.new(
           adapter: TestAdapter,
-          config: [image: "alpine", memory_mb: 256]
+          config: [agent_name: agent_name, image: "alpine", memory_mb: 256]
         )
 
-      assert template.config == %{image: "alpine", memory_mb: 256}
+      assert template.config == %{agent_name: agent_name, image: "alpine", memory_mb: 256}
     end
 
     test "defaults config to empty map" do
@@ -113,39 +116,51 @@ defmodule Strider.Sandbox.TemplateTest do
   end
 
   describe "Sandbox.create/2 with Template" do
-    test "creates sandbox from template" do
-      template = Template.new({TestAdapter, %{image: "test:latest"}})
+    test "creates sandbox from template", %{agent_name: agent_name} do
+      template = Template.new({TestAdapter, %{agent_name: agent_name, image: "test:latest"}})
 
       {:ok, sandbox} = Sandbox.create(template)
 
       assert %Instance{} = sandbox
       assert sandbox.adapter == TestAdapter
-      assert sandbox.config == %{image: "test:latest"}
+      assert sandbox.config == %{agent_name: agent_name, image: "test:latest"}
       assert Sandbox.status(sandbox) == :running
     end
 
-    test "creates sandbox from template with overrides" do
-      template = Template.new({TestAdapter, %{image: "test:latest", memory_mb: 256}})
+    test "creates sandbox from template with overrides", %{agent_name: agent_name} do
+      template =
+        Template.new(
+          {TestAdapter, %{agent_name: agent_name, image: "test:latest", memory_mb: 256}}
+        )
 
       {:ok, sandbox} = Sandbox.create(template, memory_mb: 512, cpu: 2)
 
-      assert sandbox.config == %{image: "test:latest", memory_mb: 512, cpu: 2}
+      assert sandbox.config == %{
+               agent_name: agent_name,
+               image: "test:latest",
+               memory_mb: 512,
+               cpu: 2
+             }
     end
 
-    test "works with keyword list overrides" do
-      template = Template.new({TestAdapter, %{image: "test:latest"}})
+    test "works with keyword list overrides", %{agent_name: agent_name} do
+      template = Template.new({TestAdapter, %{agent_name: agent_name, image: "test:latest"}})
 
       {:ok, sandbox} = Sandbox.create(template, env: [{"FOO", "bar"}])
 
-      assert sandbox.config == %{image: "test:latest", env: [{"FOO", "bar"}]}
+      assert sandbox.config == %{
+               agent_name: agent_name,
+               image: "test:latest",
+               env: [{"FOO", "bar"}]
+             }
     end
 
-    test "template without overrides works" do
-      template = Template.new({TestAdapter, %{image: "test:latest"}})
+    test "template without overrides works", %{agent_name: agent_name} do
+      template = Template.new({TestAdapter, %{agent_name: agent_name, image: "test:latest"}})
 
       {:ok, sandbox} = Sandbox.create(template)
 
-      assert sandbox.config == %{image: "test:latest"}
+      assert sandbox.config == %{agent_name: agent_name, image: "test:latest"}
     end
   end
 end
