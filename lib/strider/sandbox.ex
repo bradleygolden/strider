@@ -34,6 +34,7 @@ defmodule Strider.Sandbox do
   alias Strider.Sandbox.HealthPoller
   alias Strider.Sandbox.Instance
   alias Strider.Sandbox.NDJSON
+  alias Strider.Sandbox.Template
 
   @type backend :: {module(), map() | keyword()}
   @type text_block :: %{type: :text, text: String.t()}
@@ -70,6 +71,25 @@ defmodule Strider.Sandbox do
 
       {:ok, sandbox}
     end
+  end
+
+  @doc """
+  Creates a new sandbox from a template with optional config overrides.
+
+  ## Examples
+
+      template = Template.new({Docker, %{image: "python:3.12", memory_mb: 512}})
+
+      # Create from template
+      {:ok, sandbox} = Strider.Sandbox.create(template)
+
+      # With overrides
+      {:ok, sandbox} = Strider.Sandbox.create(template, memory_mb: 1024)
+  """
+  @spec create(Template.t(), map() | keyword()) :: {:ok, Instance.t()} | {:error, term()}
+  def create(%Template{} = template, overrides \\ %{}) do
+    backend = Template.to_backend(template, overrides)
+    create(backend)
   end
 
   @doc """

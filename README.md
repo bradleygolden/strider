@@ -352,6 +352,31 @@ alias Strider.Sandbox.Adapters.Docker
 Sandbox.terminate(sandbox)
 ```
 
+## Sandbox Templates
+
+Templates define reusable sandbox configurations:
+
+```elixir
+alias Strider.Sandbox
+alias Strider.Sandbox.Template
+alias Strider.Sandbox.Adapters.Docker
+
+# Define a template (store in module attribute, config, etc.)
+@python_template Template.new({Docker, %{
+  image: "python:3.12",
+  memory_mb: 512,
+  workdir: "/workspace"
+}})
+
+# Create sandbox from template
+{:ok, sandbox} = Sandbox.create(@python_template)
+
+# Override template values at creation time
+{:ok, sandbox} = Sandbox.create(@python_template, memory_mb: 1024)
+```
+
+Templates use deep merge, so nested config (like env vars) combines rather than replaces.
+
 Enable controlled network access through a proxy (see [Sandbox Proxy](#sandbox-proxy) for setup):
 
 ```elixir
