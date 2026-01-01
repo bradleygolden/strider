@@ -187,6 +187,16 @@ defmodule Strider.Sandbox.Adapter do
   """
   @callback start(sandbox_id(), opts()) :: {:ok, map()} | {:error, term()}
 
+  @doc """
+  Deletes volumes associated with a sandbox.
+
+  Used when ending sessions with `delete_volume: true`. The volume_ids
+  are typically stored in the sandbox metadata under `:created_volumes`.
+
+  Returns `:ok` on success (including if volumes don't exist).
+  """
+  @callback delete_volumes(volume_ids :: [String.t()], opts()) :: :ok | {:error, term()}
+
   @optional_callbacks [
     get_url: 2,
     read_file: 3,
@@ -195,6 +205,7 @@ defmodule Strider.Sandbox.Adapter do
     await_ready: 3,
     update: 3,
     stop: 2,
-    start: 2
+    start: 2,
+    delete_volumes: 2
   ]
 end

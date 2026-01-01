@@ -497,6 +497,22 @@ if Code.ensure_loaded?(Req) do
       "#{url}/health"
     end
 
+    @doc """
+    Deletes volumes by their IDs.
+
+    Requires `:app_name` and `:api_token` in opts.
+    """
+    @impl true
+    def delete_volumes([], _opts), do: :ok
+
+    def delete_volumes(volume_ids, opts) when is_list(volume_ids) do
+      opts_map = ensure_map(opts)
+      app_name = get_app_name!(opts_map)
+      api_token = get_api_token!(opts_map)
+
+      VolumeManager.cleanup(volume_ids, app_name, api_token)
+    end
+
     # Private helpers
 
     defp build_machine_config(config) do
