@@ -6,6 +6,7 @@ defmodule Strider.Sandbox.Adapters.DockerIntegrationTest do
 
   alias Strider.Sandbox
   alias Strider.Sandbox.Adapters.Docker
+  alias Strider.Sandbox.Template
 
   setup_all do
     {_, 0} =
@@ -145,6 +146,62 @@ defmodule Strider.Sandbox.Adapters.DockerIntegrationTest do
       {:ok, result} = Sandbox.exec(sandbox, "node -e 'console.log(1 + 1)'")
       assert result.exit_code == 0
       assert String.contains?(result.stdout, "2")
+
+      Sandbox.terminate(sandbox)
+    end
+  end
+
+  describe "Template integration" do
+    test "creates sandbox from template" do
+      template = Template.new({Docker, %{image: "strider-sandbox:test"}})
+
+      {:ok, sandbox} = Sandbox.create(template)
+
+      {:ok, result} = Sandbox.exec(sandbox, "echo 'hello from template'")
+      assert result.exit_code == 0
+      assert String.contains?(result.stdout, "hello from template")
+
+      Sandbox.terminate(sandbox)
+    end
+
+    test "creates sandbox from template with overrides" do
+      template =
+        Template.new(
+          {Docker,
+           %{
+             image: "strider-sandbox:test",
+             env: [{"BASE_VAR", "from_template"}]
+           }}
+        )
+
+      {:ok, sandbox} = Sandbox.create(template, env: [{"OVERRIDE_VAR", "from_override"}])
+
+      {:ok, result} = Sandbox.exec(sandbox, "echo $OVERRIDE_VAR")
+      assert result.exit_code == 0
+      assert String.contains?(result.stdout, "from_override")
+
+      Sandbox.terminate(sandbox)
+    end
+
+    test "template deep merges nested config" do
+      template =
+        Template.new(
+          {Docker,
+           %{
+             image: "strider-sandbox:test",
+             workdir: "/workspace"
+           }}
+        )
+
+      {:ok, sandbox} = Sandbox.create(template, memory_mb: 256)
+
+      assert sandbox.config.image == "strider-sandbox:test"
+      assert sandbox.config.workdir == "/workspace"
+      assert sandbox.config.memory_mb == 256
+
+      {:ok, result} = Sandbox.exec(sandbox, "pwd")
+      assert result.exit_code == 0
+      assert String.contains?(result.stdout, "/workspace")
 
       Sandbox.terminate(sandbox)
     end

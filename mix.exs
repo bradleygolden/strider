@@ -120,6 +120,7 @@ defmodule Strider.MixProject do
         Sandbox: [
           Strider.Sandbox,
           Strider.Sandbox.Adapter,
+          Strider.Sandbox.Template,
           Strider.Sandbox.Instance,
           Strider.Sandbox.ExecResult,
           Strider.Sandbox.Adapters.Docker,
