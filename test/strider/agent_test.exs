@@ -16,6 +16,13 @@ defmodule Strider.AgentTest do
       assert Agent.backend_module(agent) == Strider.Backends.ReqLLM
     end
 
+    if Code.ensure_loaded?(BamlElixir.Client) do
+      test "resolves :baml to Baml backend" do
+        agent = Agent.new({:baml, function: "ExtractPerson", path: "priv/baml_src"})
+        assert Agent.backend_module(agent) == Strider.Backends.Baml
+      end
+    end
+
     test "passes through full module name" do
       agent = Agent.new({Strider.Backends.Mock, response: "Hello"})
       assert Agent.backend_module(agent) == Strider.Backends.Mock
