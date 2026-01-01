@@ -1,4 +1,4 @@
-if Code.ensure_loaded?(Req) do
+if Code.ensure_loaded?(Req) and Code.ensure_loaded?(Toml) do
   defmodule Strider.Fly.Infrastructure.State do
     @moduledoc """
     Queries Fly.io API to get current infrastructure state.

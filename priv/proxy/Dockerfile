@@ -11,11 +11,17 @@ RUN mix local.hex --force && \
 
 ENV MIX_ENV=prod
 
-COPY mix.exs ./
+# Copy strider source for local path dependency
+COPY mix.exs mix.lock ./strider/
+COPY lib ./strider/lib/
+
+# Copy proxy source
+WORKDIR /app/proxy
+COPY priv/proxy/mix.exs ./
 RUN mix deps.get --only $MIX_ENV
 RUN mix deps.compile
 
-COPY lib lib
+COPY priv/proxy/lib lib
 RUN mix compile
 RUN mix release
 
@@ -34,7 +40,7 @@ ENV LC_ALL=en_US.UTF-8
 
 WORKDIR /app
 
-COPY --from=build /app/_build/prod/rel/strider_proxy ./
+COPY --from=build /app/proxy/_build/prod/rel/strider_proxy ./
 
 ENV PROXY_PORT=4000
 EXPOSE 4000

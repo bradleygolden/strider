@@ -20,7 +20,8 @@ defmodule StriderProxy.MixProject do
 
   defp deps do
     [
-      {:strider, github: "bradleygolden/strider", ref: "a400ae5"},
+      # TODO: Change back to github ref after testing
+      {:strider, path: "../strider"},
       {:bandit, "~> 1.5"},
       {:plug, "~> 1.15"},
       {:req, "~> 0.5"},

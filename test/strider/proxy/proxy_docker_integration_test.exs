@@ -7,15 +7,15 @@ defmodule Strider.Proxy.DockerIntegrationTest do
   @proxy_port 4123
 
   setup_all do
-    {_, exit_code} =
+    {output, exit_code} =
       System.cmd(
         "docker",
-        ["build", "-t", "strider-proxy:test", "-f", "Dockerfile", "."],
-        cd: "priv/proxy",
+        ["build", "-t", "strider-proxy:test", "-f", "priv/proxy/Dockerfile", "."],
         stderr_to_stdout: true
       )
 
     if exit_code != 0 do
+      IO.puts(output)
       raise "Failed to build proxy Docker image"
     end
 
@@ -164,7 +164,8 @@ defmodule Strider.Proxy.DockerIntegrationTest do
       url: url,
       body: body,
       headers: headers,
-      receive_timeout: 30_000
+      receive_timeout: 30_000,
+      decode_body: false
     )
   end
 end

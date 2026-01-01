@@ -1,4 +1,4 @@
-if Code.ensure_loaded?(Req) do
+if Code.ensure_loaded?(Req) and Code.ensure_loaded?(Toml) do
   defmodule Strider.Fly.Infrastructure.Executor do
     @moduledoc """
     Executes infrastructure changes against the Fly.io API.

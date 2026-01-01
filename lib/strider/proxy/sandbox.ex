@@ -195,7 +195,8 @@ if Code.ensure_loaded?(Plug) do
              url: url,
              headers: headers,
              body: body,
-             receive_timeout: timeout
+             receive_timeout: timeout,
+             decode_body: false
            ) do
         {:ok, response} ->
           conn
