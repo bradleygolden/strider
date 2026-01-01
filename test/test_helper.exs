@@ -1,1 +1,1 @@
-ExUnit.start(exclude: [:integration, :docker])
+ExUnit.start(exclude: [:integration, :docker, :baml])

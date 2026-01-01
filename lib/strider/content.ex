@@ -106,6 +106,8 @@ defmodule Strider.Content do
     end
   end
 
+  alias Strider.Content.Wrappable
+
   @doc """
   Creates a text content part.
 
@@ -229,15 +231,23 @@ defmodule Strider.Content do
   @doc """
   Wraps content into a list of Content.Part structs.
 
-  Handles convenience cases at API entry points:
-  - Strings are wrapped as text parts
-  - Part structs are wrapped in a list
-  - Lists of parts pass through unchanged
-  - Maps are JSON-encoded into text parts
+  Delegates to the `Strider.Content.Wrappable` protocol, which handles:
+  - Strings → text parts
+  - Part structs → wrapped in list
+  - Lists of parts → pass through unchanged
+  - Maps/structs → JSON-encoded into text parts
 
-  Maps are JSON-encoded to support tool results and structured data
-  in multi-turn conversations. When a tool returns structured data
-  like `%{result: 42}`, this is serialized so the LLM can read it.
+  Maps and structs are JSON-encoded to support tool results and structured
+  data in multi-turn conversations. When a backend returns structured data
+  like `%{result: 42}` or a struct, this is serialized so the LLM can read it.
+
+  ## Customizing Behavior
+
+  Implement the `Strider.Content.Wrappable` protocol for custom types:
+
+      defimpl Strider.Content.Wrappable, for: MyApp.CustomType do
+        def wrap(value), do: [Strider.Content.text(to_string(value))]
+      end
 
   ## Examples
 
@@ -254,10 +264,11 @@ defmodule Strider.Content do
       Content.wrap(%{result: 42, status: "success"})
       #=> [%Part{type: :text, text: "{\"result\":42,\"status\":\"success\"}"}]
 
+      # Structs are also JSON-encoded
+      Content.wrap(%MyApp.Person{name: "Alice", age: 30})
+      #=> [%Part{type: :text, text: "{\"name\":\"Alice\",\"age\":30}"}]
+
   """
-  @spec wrap(String.t() | Part.t() | [Part.t()] | map()) :: [Part.t()]
-  def wrap(content) when is_binary(content), do: [text(content)]
-  def wrap(%Part{} = part), do: [part]
-  def wrap(parts) when is_list(parts), do: parts
-  def wrap(content) when is_map(content), do: [text(Jason.encode!(content))]
+  @spec wrap(term()) :: [Part.t()]
+  def wrap(content), do: Wrappable.wrap(content)
 end

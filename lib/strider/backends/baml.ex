@@ -202,6 +202,7 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       |> maybe_put(:collectors, Map.get(config, :collectors))
       |> maybe_put(:llm_client, Map.get(config, :llm_client))
       |> maybe_put(:parse, Map.get(config, :parse, true))
+      |> maybe_put(:prefix, Map.get(config, :prefix))
     end
 
     defp maybe_put(map, _key, nil), do: map
