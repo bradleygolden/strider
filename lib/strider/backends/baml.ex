@@ -10,8 +10,8 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     def call(config, messages, opts) do
       function_name = Map.fetch!(config, :function)
       args = build_args(messages, config)
-      baml_opts = build_baml_opts(config)
       output_schema = Keyword.get(opts, :output_schema)
+      baml_opts = build_baml_opts(config, output_schema)
 
       case BamlElixir.Client.call(function_name, args, baml_opts) do
         {:ok, result} ->
@@ -26,7 +26,7 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     def stream(config, messages, _opts) do
       function_name = Map.fetch!(config, :function)
       args = build_args(messages, config)
-      baml_opts = build_baml_opts(config)
+      baml_opts = build_baml_opts(config, nil)
       caller = self()
       ref = make_ref()
 
@@ -107,13 +107,19 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       end)
     end
 
-    defp build_baml_opts(config) do
-      %{}
-      |> maybe_put(:path, Map.get(config, :path))
-      |> maybe_put(:collectors, Map.get(config, :collectors))
-      |> maybe_put(:llm_client, Map.get(config, :llm_client))
-      |> maybe_put(:parse, Map.get(config, :parse, true))
-      |> maybe_put(:prefix, Map.get(config, :prefix))
+    defp build_baml_opts(config, output_schema) do
+      opts =
+        %{}
+        |> maybe_put(:path, Map.get(config, :path))
+        |> maybe_put(:collectors, Map.get(config, :collectors))
+        |> maybe_put(:llm_client, Map.get(config, :llm_client))
+        |> maybe_put(:prefix, Map.get(config, :prefix))
+
+      if output_schema do
+        Map.put(opts, :parse, false)
+      else
+        maybe_put(opts, :parse, Map.get(config, :parse))
+      end
     end
 
     defp maybe_put(map, _key, nil), do: map
@@ -134,7 +140,7 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       )
     end
 
-    defp maybe_parse_schema(%Zoi.Types.Struct{} = schema, result) when is_map(result) do
+    defp maybe_parse_schema(schema, result) when is_map(result) and not is_nil(schema) do
       case Zoi.parse(schema, result) do
         {:ok, parsed} -> parsed
         {:error, _} -> result

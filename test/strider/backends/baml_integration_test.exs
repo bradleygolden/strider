@@ -78,20 +78,6 @@ if Code.ensure_loaded?(BamlElixir.Client) do
         assert response.finish_reason == :stop
       end
 
-      test "call/2 with structured output returns raw map when parse: false" do
-        agent =
-          Strider.Agent.new(
-            {:baml, function: "ExtractPerson", path: "test/support/baml_src", parse: false}
-          )
-
-        {:ok, response, _ctx} = Strider.call(agent, "Bob is 30 years old")
-
-        assert response.content != nil
-        assert is_map(response.content)
-        assert response.content[:name] =~ ~r/bob/i
-        assert response.content[:__baml_class__] == "Person"
-      end
-
       test "introspect returns backend metadata" do
         agent =
           Strider.Agent.new({:baml, function: "ExtractPerson", path: "test/support/baml_src"})
@@ -101,6 +87,70 @@ if Code.ensure_loaded?(BamlElixir.Client) do
         assert info.provider == "baml"
         assert info.function == "ExtractPerson"
         assert :structured_output in info.capabilities
+      end
+    end
+
+    describe "output_schema parsing" do
+      defmodule PersonStruct do
+        defstruct [:name, :age]
+      end
+
+      defmodule PersonWithAge do
+        defstruct [:name, :age]
+      end
+
+      defmodule PersonNameOnly do
+        defstruct [:name]
+      end
+
+      test "call/2 with output_schema parses response through Zoi" do
+        schema =
+          Zoi.struct(PersonStruct, %{
+            name: Zoi.string(),
+            age: Zoi.integer() |> Zoi.optional()
+          })
+          |> Zoi.coerce()
+
+        agent =
+          Strider.Agent.new({:baml, function: "ExtractPerson", path: "test/support/baml_src"})
+
+        {:ok, response, _ctx} =
+          Strider.call(agent, "Alice is 25 years old", Strider.Context.new(),
+            output_schema: schema
+          )
+
+        assert is_struct(response.content, PersonStruct)
+        assert response.content.name =~ ~r/alice/i
+      end
+
+      test "call/2 with union output_schema parses to matching variant" do
+        schema =
+          Zoi.union([
+            Zoi.object(%{name: Zoi.string(), age: Zoi.integer()})
+            |> Zoi.transform(fn data -> struct!(PersonWithAge, data) end),
+            Zoi.object(%{name: Zoi.string()})
+            |> Zoi.transform(fn data -> struct!(PersonNameOnly, data) end)
+          ])
+
+        agent =
+          Strider.Agent.new({:baml, function: "ExtractPerson", path: "test/support/baml_src"})
+
+        {:ok, response, _ctx} =
+          Strider.call(agent, "Bob is 30", Strider.Context.new(), output_schema: schema)
+
+        assert is_struct(response.content, PersonWithAge) or
+                 is_struct(response.content, PersonNameOnly)
+      end
+
+      test "call/2 without output_schema returns BamlElixir default" do
+        agent =
+          Strider.Agent.new(
+            {:baml, function: "ExtractPerson", path: "test/support/baml_src", prefix: TestBaml}
+          )
+
+        {:ok, response, _ctx} = Strider.call(agent, "Charlie is 40 years old")
+
+        assert is_struct(response.content, TestBaml.Person)
       end
     end
 

@@ -302,6 +302,37 @@ agent = Strider.Agent.new({:baml, function: "ExtractPerson", path: "priv/baml_sr
 # response.content => %MyApp.Baml.Person{name: "Alice", age: 25}
 ```
 
+### Custom Schema Parsing with Zoi
+
+Use `output_schema` to parse BAML responses through Zoi schemas, enabling union types and custom transforms:
+
+```elixir
+defmodule GetSystemInfo do
+  defstruct [:intent]
+end
+
+defmodule Done do
+  defstruct [:intent, :report]
+end
+
+# Define a union schema for discriminated responses
+schema = Zoi.union([
+  Zoi.object(%{intent: Zoi.literal("get_system_info")})
+  |> Zoi.transform(fn data -> struct!(GetSystemInfo, data) end),
+  Zoi.object(%{intent: Zoi.literal("done"), report: Zoi.string()})
+  |> Zoi.transform(fn data -> struct!(Done, data) end)
+])
+
+agent = Strider.Agent.new({:baml, function: "ClassifyIntent", path: "priv/baml_src"})
+{:ok, response, _ctx} = Strider.call(agent, "Get system info", Strider.Context.new(), output_schema: schema)
+# response.content => %GetSystemInfo{intent: "get_system_info"} or %Done{...}
+```
+
+When `output_schema` is provided, BAML returns raw maps which are then parsed through the Zoi schema. This enables:
+- Union types for LLM functions that return different response shapes
+- Custom transforms to convert maps to structs
+- Validation of response structure
+
 ### Structured Inputs
 
 BAML supports classes, arrays, maps, and unions as function parameters. Use `:args_format` and `:args` to pass structured data:
