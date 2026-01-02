@@ -13,6 +13,8 @@ defmodule Strider.Runtime do
   - `context` - The conversation context
   - `opts` - Additional options:
     - `:hooks` - Hook module(s) for this call (merged with agent hooks)
+    - `:output_schema` - Zoi schema to parse the response content
+    - `:backend_opts` - Options passed through to the backend
 
   ## Returns
 
@@ -23,13 +25,16 @@ defmodule Strider.Runtime do
   @spec call(Agent.t(), term(), Context.t(), keyword()) ::
           {:ok, Response.t(), Context.t()} | {:error, term()}
   def call(%Agent{} = agent, content, %Context{} = context, opts \\ []) do
-    {hooks_opt, backend_opts} = Keyword.pop(opts, :hooks)
+    {hooks_opt, opts} = Keyword.pop(opts, :hooks)
+    {output_schema, opts} = Keyword.pop(opts, :output_schema)
+    {backend_opts, _rest} = Keyword.pop(opts, :backend_opts, [])
     hooks = Hooks.merge(agent.hooks, hooks_opt)
+    call_opts = [output_schema: output_schema, backend_opts: backend_opts]
 
     with {:cont, transformed_content} <-
            Hooks.invoke(hooks, :on_call_start, [agent, content, context], content),
          {:ok, response, updated_context} <-
-           do_call(agent, transformed_content, context, hooks, backend_opts),
+           do_call(agent, transformed_content, context, hooks, call_opts),
          {:cont, final_response} <-
            Hooks.invoke(hooks, :on_call_end, [agent, response, updated_context], response) do
       {:ok, final_response, updated_context}
@@ -54,6 +59,7 @@ defmodule Strider.Runtime do
   - `context` - The conversation context
   - `opts` - Additional options:
     - `:hooks` - Hook module(s) for this call (merged with agent hooks)
+    - `:backend_opts` - Options passed through to the backend
 
   ## Returns
 
@@ -67,12 +73,14 @@ defmodule Strider.Runtime do
   @spec stream(Agent.t(), term(), Context.t(), keyword()) ::
           {:ok, Enumerable.t(), Context.t()} | {:error, term()}
   def stream(%Agent{} = agent, content, %Context{} = context, opts \\ []) do
-    {hooks_opt, backend_opts} = Keyword.pop(opts, :hooks)
+    {hooks_opt, opts} = Keyword.pop(opts, :hooks)
+    {backend_opts, _rest} = Keyword.pop(opts, :backend_opts, [])
     hooks = Hooks.merge(agent.hooks, hooks_opt)
+    stream_opts = [backend_opts: backend_opts]
 
     case Hooks.invoke(hooks, :on_stream_start, [agent, content, context], content) do
       {:cont, transformed_content} ->
-        do_stream(agent, transformed_content, context, hooks, backend_opts)
+        do_stream(agent, transformed_content, context, hooks, stream_opts)
 
       {:error, reason} ->
         {:error, reason}
@@ -156,6 +164,6 @@ defmodule Strider.Runtime do
 
   defp build_backend_config(agent) do
     {_type, backend_config} = agent.backend
-    Map.merge(backend_config, agent.config)
+    backend_config
   end
 end

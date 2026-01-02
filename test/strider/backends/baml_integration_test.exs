@@ -53,7 +53,9 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     describe "Strider BAML backend integration" do
       test "call/2 with :baml backend executes BAML function" do
         agent =
-          Strider.Agent.new({:baml, function: "Summarize", path: "test/support/baml_src"})
+          Strider.Agent.new(
+            {Strider.Backends.Baml, function: "Summarize", path: "test/support/baml_src"}
+          )
 
         {:ok, response, _ctx} =
           Strider.call(agent, "The quick brown fox jumps over the lazy dog.")
@@ -67,7 +69,8 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       test "call/2 with structured output function returns struct when prefix provided" do
         agent =
           Strider.Agent.new(
-            {:baml, function: "ExtractPerson", path: "test/support/baml_src", prefix: TestBaml}
+            {Strider.Backends.Baml,
+             function: "ExtractPerson", path: "test/support/baml_src", prefix: TestBaml}
           )
 
         {:ok, response, _ctx} = Strider.call(agent, "Alice is 25 years old")
@@ -80,7 +83,9 @@ if Code.ensure_loaded?(BamlElixir.Client) do
 
       test "introspect returns backend metadata" do
         agent =
-          Strider.Agent.new({:baml, function: "ExtractPerson", path: "test/support/baml_src"})
+          Strider.Agent.new(
+            {Strider.Backends.Baml, function: "ExtractPerson", path: "test/support/baml_src"}
+          )
 
         info = Strider.Agent.backend_module(agent).introspect(elem(agent.backend, 1))
 
@@ -112,7 +117,9 @@ if Code.ensure_loaded?(BamlElixir.Client) do
           |> Zoi.coerce()
 
         agent =
-          Strider.Agent.new({:baml, function: "ExtractPerson", path: "test/support/baml_src"})
+          Strider.Agent.new(
+            {Strider.Backends.Baml, function: "ExtractPerson", path: "test/support/baml_src"}
+          )
 
         {:ok, response, _ctx} =
           Strider.call(agent, "Alice is 25 years old", Strider.Context.new(),
@@ -133,7 +140,9 @@ if Code.ensure_loaded?(BamlElixir.Client) do
           ])
 
         agent =
-          Strider.Agent.new({:baml, function: "ExtractPerson", path: "test/support/baml_src"})
+          Strider.Agent.new(
+            {Strider.Backends.Baml, function: "ExtractPerson", path: "test/support/baml_src"}
+          )
 
         {:ok, response, _ctx} =
           Strider.call(agent, "Bob is 30", Strider.Context.new(), output_schema: schema)
@@ -145,7 +154,8 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       test "call/2 without output_schema returns BamlElixir default" do
         agent =
           Strider.Agent.new(
-            {:baml, function: "ExtractPerson", path: "test/support/baml_src", prefix: TestBaml}
+            {Strider.Backends.Baml,
+             function: "ExtractPerson", path: "test/support/baml_src", prefix: TestBaml}
           )
 
         {:ok, response, _ctx} = Strider.call(agent, "Charlie is 40 years old")
@@ -157,7 +167,9 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     describe "streaming" do
       test "stream/2 returns enumerable stream" do
         agent =
-          Strider.Agent.new({:baml, function: "Summarize", path: "test/support/baml_src"})
+          Strider.Agent.new(
+            {Strider.Backends.Baml, function: "Summarize", path: "test/support/baml_src"}
+          )
 
         {:ok, stream, _ctx} =
           Strider.stream(agent, "Elixir is a functional programming language.")

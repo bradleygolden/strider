@@ -27,30 +27,29 @@ if Code.ensure_loaded?(ReqLLM) do
 
     ## Configuration
 
-    Additional options can be passed as keyword arguments:
+    Backend options are passed in the agent tuple and forwarded to ReqLLM:
 
     - `:temperature` - Sampling temperature (0.0 to 2.0)
     - `:max_tokens` - Maximum tokens in response
     - `:top_p` - Nucleus sampling parameter
     - `:stop` - Stop sequences
+    - Any other ReqLLM-supported options
 
     ## Examples
 
-        # Using Anthropic directly
+        # Using Anthropic directly with options in the tuple
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
-          temperature: 0.7,
-          max_tokens: 1000
+          {:req_llm, model: "anthropic:claude-sonnet-4-5", temperature: 0.7, max_tokens: 1000}
         )
 
         # Using OpenRouter
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "openrouter:anthropic/claude-sonnet-4-5"}
+          {:req_llm, "openrouter:anthropic/claude-sonnet-4-5"}
         )
 
         # Using Amazon Bedrock
         agent = Strider.Agent.new(
-          {Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"}
+          {:req_llm, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"}
         )
 
     ## Supported Providers
@@ -77,8 +76,9 @@ if Code.ensure_loaded?(ReqLLM) do
     @impl true
     def call(config, messages, opts) do
       model = Map.fetch!(config, :model)
-      options = build_options(config)
       output_schema = Keyword.get(opts, :output_schema)
+      backend_opts = Keyword.get(opts, :backend_opts, [])
+      options = build_options(config, backend_opts)
       req_messages = Enum.map(messages, &to_req_llm_message/1)
 
       if output_schema do
@@ -109,9 +109,10 @@ if Code.ensure_loaded?(ReqLLM) do
     defp to_llm_schema(schema), do: schema
 
     @impl true
-    def stream(config, messages, _opts) do
+    def stream(config, messages, opts) do
       model = Map.fetch!(config, :model)
-      options = build_options(config)
+      backend_opts = Keyword.get(opts, :backend_opts, [])
+      options = build_options(config, backend_opts)
       req_messages = Enum.map(messages, &to_req_llm_message/1)
 
       case ReqLLM.stream_text(model, req_messages, options) do
@@ -145,11 +146,12 @@ if Code.ensure_loaded?(ReqLLM) do
 
     # Private helpers
 
-    defp build_options(config) do
+    defp build_options(config, backend_opts) do
       config
-      |> Map.take([:temperature, :max_tokens, :top_p, :stop, :req_http_options])
+      |> Map.drop([:model])
+      |> Map.to_list()
+      |> Keyword.merge(backend_opts)
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Enum.into([])
     end
 
     defp normalize_response(response, model) do

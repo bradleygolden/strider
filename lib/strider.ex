@@ -41,7 +41,8 @@ defmodule Strider do
 
   alias Strider.{Agent, Context, Response, Runtime}
 
-  @agent_opts [:system_prompt, :hooks, :temperature, :max_tokens, :top_p]
+  @agent_opts [:system_prompt, :hooks]
+  @call_opts [:output_schema, :hooks, :backend_opts, :context]
 
   @doc """
   Calls an LLM and returns the response.
@@ -92,7 +93,7 @@ defmodule Strider do
       ], model: "anthropic:claude-sonnet-4-5")
 
       # With explicit agent (no context)
-      agent = Strider.Agent.new({:mock, response: "Hello!"})
+      agent = Strider.Agent.new({Strider.Backends.Mock, response: "Hello!"})
       {:ok, response, _ctx} = Strider.call(agent, "Hello!")
 
       # Full explicit call
@@ -113,11 +114,13 @@ defmodule Strider do
         raise ArgumentError,
               "model option is required, e.g. model: \"anthropic:claude-sonnet-4-5\""
 
-    {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
+    {agent_opts, rest} = Keyword.split(opts, @agent_opts)
+    {call_opts, rest} = Keyword.split(rest, @call_opts)
     {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
-    {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
+    {backend, backend_config} = Keyword.pop(rest, :backend, default_backend())
+    backend_config = Keyword.delete(backend_config, :model)
 
-    agent = Agent.new({backend, model}, agent_opts)
+    agent = Agent.new({backend, Map.new([{:model, model} | backend_config])}, agent_opts)
     {context, final_content} = build_context_from_content(content, base_context)
 
     Runtime.call(agent, final_content, context, call_opts)
@@ -151,7 +154,7 @@ defmodule Strider do
       Enum.each(stream, fn chunk -> IO.write(chunk.content) end)
 
       # With explicit agent (no context)
-      agent = Strider.Agent.new({:mock, stream_chunks: ["Hello", " ", "world"]})
+      agent = Strider.Agent.new({Strider.Backends.Mock, stream_chunks: ["Hello", " ", "world"]})
       {:ok, stream, _ctx} = Strider.stream(agent, "Tell me a story")
 
       # Full explicit call
@@ -172,11 +175,13 @@ defmodule Strider do
         raise ArgumentError,
               "model option is required, e.g. model: \"anthropic:claude-sonnet-4-5\""
 
-    {agent_opts, call_opts} = Keyword.split(opts, @agent_opts)
+    {agent_opts, rest} = Keyword.split(opts, @agent_opts)
+    {call_opts, rest} = Keyword.split(rest, @call_opts)
     {base_context, call_opts} = Keyword.pop(call_opts, :context, Context.new())
-    {backend, call_opts} = Keyword.pop(call_opts, :backend, default_backend())
+    {backend, backend_config} = Keyword.pop(rest, :backend, default_backend())
+    backend_config = Keyword.delete(backend_config, :model)
 
-    agent = Agent.new({backend, model}, agent_opts)
+    agent = Agent.new({backend, Map.new([{:model, model} | backend_config])}, agent_opts)
     {context, final_content} = build_context_from_content(content, base_context)
 
     Runtime.stream(agent, final_content, context, call_opts)

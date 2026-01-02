@@ -73,10 +73,11 @@ defmodule Strider.Backend do
 
   ## Parameters
 
-  - `config` - Backend configuration (model, API keys, etc.)
+  - `config` - Backend configuration from the agent tuple (model, API keys, etc.)
   - `messages` - List of `Strider.Message` structs
   - `opts` - Additional options:
-    - `:output_schema` - Schema for structured output validation
+    - `:output_schema` - Zoi schema for structured output parsing (Strider opt)
+    - `:backend_opts` - Options passed through to the underlying library
 
   ## Returns
 
@@ -91,9 +92,10 @@ defmodule Strider.Backend do
 
   ## Parameters
 
-  - `config` - Backend configuration
+  - `config` - Backend configuration from the agent tuple
   - `messages` - List of `Strider.Message` structs
-  - `opts` - Additional options
+  - `opts` - Additional options:
+    - `:backend_opts` - Options passed through to the underlying library
 
   ## Returns
 

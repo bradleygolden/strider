@@ -5,7 +5,7 @@ defmodule StriderTest do
 
   describe "call/4 with mock backend" do
     test "returns a response and updated context" do
-      agent = Agent.new({:mock, response: "Hello from mock!"})
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello from mock!"})
       context = Context.new()
 
       assert {:ok, response, updated_context} = Strider.call(agent, "Hi!", context)
@@ -22,7 +22,7 @@ defmodule StriderTest do
 
     test "includes system prompt in messages" do
       agent =
-        Agent.new({:mock, response: "I'm here to help!"},
+        Agent.new({Strider.Backends.Mock, response: "I'm here to help!"},
           system_prompt: "You are a helpful assistant."
         )
 
@@ -32,7 +32,7 @@ defmodule StriderTest do
     end
 
     test "preserves conversation history" do
-      agent = Agent.new({:mock, response: "Reply"})
+      agent = Agent.new({Strider.Backends.Mock, response: "Reply"})
       context = Context.new()
 
       {:ok, _response1, context} = Strider.call(agent, "First message", context)
@@ -42,14 +42,14 @@ defmodule StriderTest do
     end
 
     test "returns error from backend" do
-      agent = Agent.new({:mock, error: :rate_limited})
+      agent = Agent.new({Strider.Backends.Mock, error: :rate_limited})
       context = Context.new()
 
       assert {:error, :rate_limited} = Strider.call(agent, "Hello!", context)
     end
 
     test "accepts multi-modal content" do
-      agent = Agent.new({:mock, response: "I see an image of a cat."})
+      agent = Agent.new({Strider.Backends.Mock, response: "I see an image of a cat."})
       context = Context.new()
 
       multi_modal_content = [
@@ -67,7 +67,7 @@ defmodule StriderTest do
     end
 
     test "accepts binary image content" do
-      agent = Agent.new({:mock, response: "Audio processed."})
+      agent = Agent.new({Strider.Backends.Mock, response: "Audio processed."})
       context = Context.new()
 
       content = [
@@ -84,7 +84,7 @@ defmodule StriderTest do
 
   describe "stream/4 with mock backend" do
     test "returns a stream of chunks" do
-      agent = Agent.new({:mock, stream_chunks: ["Hello", " ", "world", "!"]})
+      agent = Agent.new({Strider.Backends.Mock, stream_chunks: ["Hello", " ", "world", "!"]})
       context = Context.new()
 
       assert {:ok, stream, updated_context} = Strider.stream(agent, "Hi!", context)
@@ -97,7 +97,7 @@ defmodule StriderTest do
     end
 
     test "returns error from backend" do
-      agent = Agent.new({:mock, error: :connection_failed})
+      agent = Agent.new({Strider.Backends.Mock, error: :connection_failed})
       context = Context.new()
 
       assert {:error, :connection_failed} = Strider.stream(agent, "Hello!", context)
@@ -106,7 +106,7 @@ defmodule StriderTest do
 
   describe "call/2 with agent (no context)" do
     test "creates fresh context implicitly" do
-      agent = Agent.new({:mock, response: "Hello!"})
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!"})
 
       assert {:ok, response, context} = Strider.call(agent, "Hi!")
 
@@ -115,7 +115,7 @@ defmodule StriderTest do
     end
 
     test "works with multi-modal content" do
-      agent = Agent.new({:mock, response: "I see a cat."})
+      agent = Agent.new({Strider.Backends.Mock, response: "I see a cat."})
 
       multi_modal = [
         Content.text("What's this?"),
@@ -127,7 +127,7 @@ defmodule StriderTest do
     end
 
     test "works with messages content (conversation history)" do
-      agent = Agent.new({:mock, response: "Your name is Alice."})
+      agent = Agent.new({Strider.Backends.Mock, response: "Your name is Alice."})
 
       messages = [
         %{role: :user, content: "My name is Alice"},
@@ -142,7 +142,7 @@ defmodule StriderTest do
     end
 
     test "works with few-shot examples" do
-      agent = Agent.new({:mock, response: "Adiós"})
+      agent = Agent.new({Strider.Backends.Mock, response: "Adiós"})
 
       few_shot = [
         %{role: :user, content: "Translate: Hello"},
@@ -155,7 +155,7 @@ defmodule StriderTest do
     end
 
     test "works with multi-modal content in messages" do
-      agent = Agent.new({:mock, response: "I see a cat in the image."})
+      agent = Agent.new({Strider.Backends.Mock, response: "I see a cat in the image."})
 
       messages = [
         %{
@@ -175,7 +175,7 @@ defmodule StriderTest do
     end
 
     test "works with Strider.Message structs" do
-      agent = Agent.new({:mock, response: "Hello Alice!"})
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello Alice!"})
 
       messages = [
         Message.new(:user, "My name is Alice"),
@@ -188,7 +188,7 @@ defmodule StriderTest do
     end
 
     test "works with Content structs" do
-      agent = Agent.new({:mock, response: "I see a cat."})
+      agent = Agent.new({Strider.Backends.Mock, response: "I see a cat."})
 
       content = [
         Content.text("What's in this image?"),
@@ -200,7 +200,7 @@ defmodule StriderTest do
     end
 
     test "works with Content structs in messages" do
-      agent = Agent.new({:mock, response: "It's orange."})
+      agent = Agent.new({Strider.Backends.Mock, response: "It's orange."})
 
       messages = [
         Message.new(:user, [
@@ -218,7 +218,7 @@ defmodule StriderTest do
 
   describe "stream/2 with agent (no context)" do
     test "creates fresh context implicitly" do
-      agent = Agent.new({:mock, stream_chunks: ["Hello", " ", "world"]})
+      agent = Agent.new({Strider.Backends.Mock, stream_chunks: ["Hello", " ", "world"]})
 
       assert {:ok, stream, context} = Strider.stream(agent, "Hi!")
 
@@ -228,7 +228,10 @@ defmodule StriderTest do
     end
 
     test "works with messages content" do
-      agent = Agent.new({:mock, stream_chunks: ["Your", " ", "name", " ", "is", " ", "Alice"]})
+      agent =
+        Agent.new(
+          {Strider.Backends.Mock, stream_chunks: ["Your", " ", "name", " ", "is", " ", "Alice"]}
+        )
 
       messages = [
         %{role: :user, content: "My name is Alice"},
@@ -255,7 +258,8 @@ defmodule StriderTest do
       {:ok, response, updated_context} =
         Strider.call("What's my name?",
           backend: Strider.Backends.Mock,
-          model: [response: "Your name is Alice."],
+          model: "mock",
+          response: "Your name is Alice.",
           context: existing_context
         )
 
@@ -278,7 +282,8 @@ defmodule StriderTest do
             %{role: :user, content: "What's the secret word?"}
           ],
           backend: Strider.Backends.Mock,
-          model: [response: "The secret word is banana."],
+          model: "mock",
+          response: "The secret word is banana.",
           context: existing_context
         )
 
@@ -298,7 +303,8 @@ defmodule StriderTest do
       {:ok, stream, updated_context} =
         Strider.stream("Tell me a joke",
           backend: Strider.Backends.Mock,
-          model: [stream_chunks: ["Why", " did", " the", " chicken"]],
+          model: "mock",
+          stream_chunks: ["Why", " did", " the", " chicken"],
           context: existing_context
         )
 
@@ -311,46 +317,48 @@ defmodule StriderTest do
 
   describe "Agent.new/1 API styles" do
     test "tuple as first argument" do
-      agent = Agent.new({:req_llm, "anthropic:claude-sonnet-4-5"})
+      agent = Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"})
 
-      assert agent.backend == {:req_llm, %{model: "anthropic:claude-sonnet-4-5"}}
+      assert agent.backend == {Strider.Backends.ReqLLM, %{model: "anthropic:claude-sonnet-4-5"}}
       assert agent.system_prompt == nil
     end
 
     test "tuple with options" do
       agent =
-        Agent.new({:req_llm, "openai:gpt-4"},
-          system_prompt: "You are helpful.",
-          temperature: 0.7
+        Agent.new({Strider.Backends.ReqLLM, model: "openai:gpt-4", temperature: 0.7},
+          system_prompt: "You are helpful."
         )
 
-      assert agent.backend == {:req_llm, %{model: "openai:gpt-4"}}
+      assert agent.backend ==
+               {Strider.Backends.ReqLLM, %{model: "openai:gpt-4", temperature: 0.7}}
+
       assert agent.system_prompt == "You are helpful."
-      assert agent.config == %{temperature: 0.7}
     end
 
     test "pure keyword style" do
       agent =
         Agent.new(
-          backend: {:req_llm, "openai:gpt-4"},
+          backend: {Strider.Backends.ReqLLM, "openai:gpt-4"},
           system_prompt: "You are helpful."
         )
 
-      assert agent.backend == {:req_llm, %{model: "openai:gpt-4"}}
+      assert agent.backend == {Strider.Backends.ReqLLM, %{model: "openai:gpt-4"}}
       assert agent.system_prompt == "You are helpful."
     end
 
     test "three-element tuple with backend options (BYOK)" do
-      agent = Agent.new({:req_llm, "anthropic:claude-sonnet-4-5", api_key: "sk-test"})
+      agent =
+        Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5", api_key: "sk-test"})
 
       assert agent.backend ==
-               {:req_llm, %{model: "anthropic:claude-sonnet-4-5", api_key: "sk-test"}}
+               {Strider.Backends.ReqLLM,
+                %{model: "anthropic:claude-sonnet-4-5", api_key: "sk-test"}}
     end
 
     test "mock backend with keyword config" do
-      agent = Agent.new({:mock, response: "Hello!", delay: 100})
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!", delay: 100})
 
-      assert agent.backend == {:mock, %{response: "Hello!", delay: 100}}
+      assert agent.backend == {Strider.Backends.Mock, %{response: "Hello!", delay: 100}}
     end
   end
 end

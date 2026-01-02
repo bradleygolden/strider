@@ -6,9 +6,9 @@ defmodule Strider.Agent do
 
   ## Backend Specification
 
-  The backend is specified as a tuple: `{backend_type, backend_config}` where:
+  The backend is specified as a tuple: `{backend_module, backend_config}` where:
 
-  - `backend_type` is a backend module (e.g., `Strider.Backends.ReqLLM`) or a shortcut (`:mock`, `:req_llm`)
+  - `backend_module` is a module implementing `Strider.Backend` behaviour
   - `backend_config` is backend-specific (model string, keyword list, etc.)
 
   ## Creating Agents
@@ -30,32 +30,29 @@ defmodule Strider.Agent do
 
   ## Backend Examples
 
-      # Using :req_llm shortcut (requires :req_llm dep)
-      Strider.Agent.new({:req_llm, "anthropic:claude-sonnet-4-5"})
-      Strider.Agent.new({:req_llm, "openai:gpt-4"})
-      Strider.Agent.new({:req_llm, "openrouter:anthropic/claude-sonnet-4-5"})
-
-      # Or use the full module name
-      Strider.Agent.new({Strider.Backends.ReqLLM, "amazon_bedrock:anthropic.claude-sonnet-4-5-20241022-v2:0"})
+      # ReqLLM backend (requires :req_llm dep)
+      Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"})
+      Strider.Agent.new({Strider.Backends.ReqLLM, "openai:gpt-4"})
 
       # With BYOK (Bring Your Own Key)
-      Strider.Agent.new({:req_llm, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
+      Strider.Agent.new({Strider.Backends.ReqLLM, model: "anthropic:claude-sonnet-4-5", api_key: user_api_key})
 
       # Mock backend for testing
-      Strider.Agent.new({:mock, response: "Hello!"})
+      Strider.Agent.new({Strider.Backends.Mock, response: "Hello!"})
 
       # Custom backend module
       Strider.Agent.new({MyApp.CustomBackend, endpoint: "http://localhost:8000"})
 
-  ## Configuration Options
+  ## Agent Options
 
   Options can be passed as the second argument or in keyword style:
 
   - `:system_prompt` - The system prompt for conversations
   - `:hooks` - Hook module(s) for lifecycle events (see `Strider.Hooks`)
-  - `:temperature` - Sampling temperature (passed to backend)
-  - `:max_tokens` - Maximum tokens in response (passed to backend)
-  - `:top_p` - Nucleus sampling parameter (passed to backend)
+
+  Backend-specific options (temperature, max_tokens, etc.) belong in the backend tuple:
+
+      Strider.Agent.new({Strider.Backends.ReqLLM, model: "anthropic:claude-sonnet-4-5", temperature: 0.7})
 
   ## Hooks
 
@@ -74,21 +71,20 @@ defmodule Strider.Agent do
 
   """
 
-  @type backend_type :: atom() | module()
+  @type backend_module :: module()
   @type backend_config :: map()
-  @type backend :: {backend_type(), backend_config()}
+  @type backend :: {backend_module(), backend_config()}
 
   @type hooks :: module() | [module()] | nil
 
   @type t :: %__MODULE__{
           backend: backend(),
           system_prompt: String.t() | nil,
-          hooks: hooks(),
-          config: map()
+          hooks: hooks()
         }
 
   @enforce_keys [:backend]
-  defstruct [:backend, :system_prompt, :hooks, config: %{}]
+  defstruct [:backend, :system_prompt, :hooks]
 
   @doc """
   Creates a new agent.
@@ -99,16 +95,16 @@ defmodule Strider.Agent do
   ## Examples
 
       # Mock backend (built-in)
-      iex> Strider.Agent.new({:mock, response: "Hello!"})
-      %Strider.Agent{backend: {:mock, %{response: "Hello!"}}, system_prompt: nil, config: %{}}
+      iex> Strider.Agent.new({Strider.Backends.Mock, response: "Hello!"})
+      %Strider.Agent{backend: {Strider.Backends.Mock, %{response: "Hello!"}}, system_prompt: nil, hooks: nil}
 
       # With options
-      iex> Strider.Agent.new({:mock, response: "Hi"}, system_prompt: "You are helpful.")
-      %Strider.Agent{backend: {:mock, %{response: "Hi"}}, system_prompt: "You are helpful.", config: %{}}
+      iex> Strider.Agent.new({Strider.Backends.Mock, response: "Hi"}, system_prompt: "You are helpful.")
+      %Strider.Agent{backend: {Strider.Backends.Mock, %{response: "Hi"}}, system_prompt: "You are helpful.", hooks: nil}
 
       # Pure keyword style
-      iex> Strider.Agent.new(backend: {:mock, response: "Test"}, system_prompt: "You are helpful.")
-      %Strider.Agent{backend: {:mock, %{response: "Test"}}, system_prompt: "You are helpful.", config: %{}}
+      iex> Strider.Agent.new(backend: {Strider.Backends.Mock, response: "Test"}, system_prompt: "You are helpful.")
+      %Strider.Agent{backend: {Strider.Backends.Mock, %{response: "Test"}}, system_prompt: "You are helpful.", hooks: nil}
 
   """
   @spec new(backend() | keyword()) :: t()
@@ -138,52 +134,26 @@ defmodule Strider.Agent do
   defp normalize_backend_config(model) when is_binary(model), do: %{model: model}
 
   defp build_agent(backend, opts) do
-    {config_opts, agent_opts} = split_config_opts(opts)
-
     %__MODULE__{
       backend: backend,
-      system_prompt: Keyword.get(agent_opts, :system_prompt),
-      hooks: Keyword.get(agent_opts, :hooks),
-      config: Map.new(config_opts)
+      system_prompt: Keyword.get(opts, :system_prompt),
+      hooks: Keyword.get(opts, :hooks)
     }
-  end
-
-  # Split options into config (temperature, max_tokens, etc.) and agent-level (system_prompt, hooks)
-  @agent_keys [:system_prompt, :hooks]
-
-  defp split_config_opts(opts) do
-    Enum.split_with(opts, fn {key, _} -> key not in @agent_keys end)
   end
 
   @doc """
   Returns the backend module for this agent.
 
-  Maps backend atoms to their implementing modules. If the backend type
-  is already a module, returns it directly.
-
   ## Examples
 
-      iex> agent = Strider.Agent.new({:mock, response: "Hello"})
+      iex> agent = Strider.Agent.new({Strider.Backends.Mock, response: "Hello"})
       iex> Strider.Agent.backend_module(agent)
       Strider.Backends.Mock
 
   """
   @spec backend_module(t()) :: module()
-  def backend_module(%__MODULE__{backend: {backend_type, _}}) do
-    resolve_backend_module(backend_type)
-  end
-
-  defp resolve_backend_module(:mock), do: Strider.Backends.Mock
-  defp resolve_backend_module(:req_llm), do: Strider.Backends.ReqLLM
-  defp resolve_backend_module(:baml), do: Strider.Backends.Baml
-
-  defp resolve_backend_module(module) when is_atom(module) do
-    # Check if it's a module (has module info) or unknown atom
-    if Code.ensure_loaded?(module) and function_exported?(module, :call, 3) do
-      module
-    else
-      raise ArgumentError, "Unknown backend: #{inspect(module)}"
-    end
+  def backend_module(%__MODULE__{backend: {backend_module, _}}) do
+    backend_module
   end
 
   @doc """
@@ -191,7 +161,7 @@ defmodule Strider.Agent do
 
   ## Examples
 
-      iex> agent = Strider.Agent.new({:mock, response: "Hello"})
+      iex> agent = Strider.Agent.new({Strider.Backends.Mock, response: "Hello"})
       iex> Strider.Agent.backend_config(agent)
       %{response: "Hello"}
 
@@ -199,55 +169,5 @@ defmodule Strider.Agent do
   @spec backend_config(t()) :: map()
   def backend_config(%__MODULE__{backend: {_, config}}) do
     config
-  end
-
-  @doc """
-  Updates the agent's configuration.
-
-  Use this to modify agent settings dynamically, such as adjusting temperature
-  based on task complexity or changing max_tokens for different response lengths.
-
-  Configuration set here is merged with backend config when making calls.
-
-  ## Examples
-
-      iex> agent = Strider.Agent.new({:mock, response: "Hello"})
-      iex> agent = Strider.Agent.put_config(agent, :temperature, 0.5)
-      iex> agent.config
-      %{temperature: 0.5}
-
-      # Adjust settings based on task
-      agent = if complex_task? do
-        Agent.put_config(agent, :temperature, 0.2)
-      else
-        Agent.put_config(agent, :temperature, 0.8)
-      end
-
-  """
-  @spec put_config(t(), atom(), term()) :: t()
-  def put_config(%__MODULE__{} = agent, key, value) do
-    %{agent | config: Map.put(agent.config, key, value)}
-  end
-
-  @doc """
-  Gets a configuration value from the agent.
-
-  This retrieves values from the agent's config map, which includes
-  options like temperature, max_tokens, and top_p passed during creation.
-
-  ## Examples
-
-      iex> agent = Strider.Agent.new({:mock, response: "Hello"}, temperature: 0.7)
-      iex> Strider.Agent.get_config(agent, :temperature)
-      0.7
-
-      iex> agent = Strider.Agent.new({:mock, response: "Hello"})
-      iex> Strider.Agent.get_config(agent, :missing, 1.0)
-      1.0
-
-  """
-  @spec get_config(t(), atom(), term()) :: term()
-  def get_config(%__MODULE__{config: config}, key, default \\ nil) do
-    Map.get(config, key, default)
   end
 end

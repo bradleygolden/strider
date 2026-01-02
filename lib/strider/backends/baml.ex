@@ -11,7 +11,8 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       function_name = Map.fetch!(config, :function)
       args = build_args(messages, config)
       output_schema = Keyword.get(opts, :output_schema)
-      baml_opts = build_baml_opts(config, output_schema)
+      backend_opts = Keyword.get(opts, :backend_opts, [])
+      baml_opts = build_baml_opts(config, output_schema, backend_opts)
 
       case BamlElixir.Client.call(function_name, args, baml_opts) do
         {:ok, result} ->
@@ -23,10 +24,11 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     end
 
     @impl true
-    def stream(config, messages, _opts) do
+    def stream(config, messages, opts) do
       function_name = Map.fetch!(config, :function)
       args = build_args(messages, config)
-      baml_opts = build_baml_opts(config, nil)
+      backend_opts = Keyword.get(opts, :backend_opts, [])
+      baml_opts = build_baml_opts(config, nil, backend_opts)
       caller = self()
       ref = make_ref()
 
@@ -107,23 +109,23 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       end)
     end
 
-    defp build_baml_opts(config, output_schema) do
+    @internal_keys [:function, :args_format, :args]
+
+    defp build_baml_opts(config, output_schema, backend_opts) do
       opts =
-        %{}
-        |> maybe_put(:path, Map.get(config, :path))
-        |> maybe_put(:collectors, Map.get(config, :collectors))
-        |> maybe_put(:llm_client, Map.get(config, :llm_client))
-        |> maybe_put(:prefix, Map.get(config, :prefix))
+        config
+        |> Map.drop(@internal_keys)
+        |> Map.to_list()
+        |> Keyword.merge(backend_opts)
+        |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+        |> Map.new()
 
       if output_schema do
         Map.put(opts, :parse, false)
       else
-        maybe_put(opts, :parse, Map.get(config, :parse))
+        opts
       end
     end
-
-    defp maybe_put(map, _key, nil), do: map
-    defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
     defp build_response(result, config, output_schema) do
       content = maybe_parse_schema(output_schema, result)

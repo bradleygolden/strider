@@ -229,7 +229,7 @@ defmodule Strider.HooksTest do
 
   describe "call/4 with hooks" do
     test "invokes call lifecycle hooks" do
-      agent = Agent.new({:mock, response: "Hello!"}, hooks: TrackingHooks)
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!"}, hooks: TrackingHooks)
       context = Context.new()
 
       {:ok, response, _context} = Strider.call(agent, "Hi!", context)
@@ -241,7 +241,7 @@ defmodule Strider.HooksTest do
     end
 
     test "invokes on_call_error on failure" do
-      agent = Agent.new({:mock, error: :rate_limited}, hooks: TrackingHooks)
+      agent = Agent.new({Strider.Backends.Mock, error: :rate_limited}, hooks: TrackingHooks)
       context = Context.new()
 
       {:error, :rate_limited} = Strider.call(agent, "Hi!", context)
@@ -251,7 +251,7 @@ defmodule Strider.HooksTest do
     end
 
     test "per-call hooks override agent hooks" do
-      agent = Agent.new({:mock, response: "Hello!"}, hooks: PartialHooks)
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!"}, hooks: PartialHooks)
       context = Context.new()
 
       {:ok, _response, _context} = Strider.call(agent, "Hi!", context, hooks: TrackingHooks)
@@ -261,7 +261,7 @@ defmodule Strider.HooksTest do
     end
 
     test "works without any hooks" do
-      agent = Agent.new({:mock, response: "Hello!"})
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!"})
       context = Context.new()
 
       {:ok, response, _context} = Strider.call(agent, "Hi!", context)
@@ -269,7 +269,9 @@ defmodule Strider.HooksTest do
     end
 
     test "halts execution and returns cached response" do
-      agent = Agent.new({:mock, response: "Should not be called"}, hooks: HaltingHooks)
+      agent =
+        Agent.new({Strider.Backends.Mock, response: "Should not be called"}, hooks: HaltingHooks)
+
       context = Context.new()
 
       {:ok, response, _context} = Strider.call(agent, "Hi!", context)
@@ -278,14 +280,16 @@ defmodule Strider.HooksTest do
     end
 
     test "returns error when hook errors" do
-      agent = Agent.new({:mock, response: "Should not be called"}, hooks: ErrorHooks)
+      agent =
+        Agent.new({Strider.Backends.Mock, response: "Should not be called"}, hooks: ErrorHooks)
+
       context = Context.new()
 
       {:error, :blocked_by_guardrails} = Strider.call(agent, "Hi!", context)
     end
 
     test "transforms content and response" do
-      agent = Agent.new({:mock, response: "Hello!"}, hooks: TransformingHooks)
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!"}, hooks: TransformingHooks)
       context = Context.new()
 
       {:ok, response, _context} = Strider.call(agent, "Hi!", context)
@@ -297,7 +301,11 @@ defmodule Strider.HooksTest do
 
   describe "stream/4 with hooks" do
     test "invokes stream lifecycle hooks" do
-      agent = Agent.new({:mock, stream_chunks: ["Hello", " ", "world"]}, hooks: TrackingHooks)
+      agent =
+        Agent.new({Strider.Backends.Mock, stream_chunks: ["Hello", " ", "world"]},
+          hooks: TrackingHooks
+        )
+
       context = Context.new()
 
       {:ok, stream, _context} = Strider.stream(agent, "Hi!", context)

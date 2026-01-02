@@ -182,10 +182,9 @@ You can also combine messages with an existing context - messages are appended:
 For more control, create an agent explicitly:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"},
-  system_prompt: "You are a helpful assistant.",
-  temperature: 0.7,
-  max_tokens: 1000
+agent = Strider.Agent.new(
+  {Strider.Backends.ReqLLM, model: "anthropic:claude-sonnet-4-5", temperature: 0.7, max_tokens: 1000},
+  system_prompt: "You are a helpful assistant."
 )
 
 context = Strider.Context.new()
@@ -237,7 +236,7 @@ Hooks can:
 Pass API keys at runtime for multi-tenant applications:
 
 ```elixir
-agent = Strider.Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5", api_key: user_api_key})
+agent = Strider.Agent.new({Strider.Backends.ReqLLM, model: "anthropic:claude-sonnet-4-5", api_key: user_api_key})
 ```
 
 ## Telemetry
@@ -285,7 +284,7 @@ function ExtractPerson(text: string) -> Person {
 Call via Strider:
 
 ```elixir
-agent = Strider.Agent.new({:baml, function: "ExtractPerson", path: "priv/baml_src"})
+agent = Strider.Agent.new({Strider.Backends.Baml, function: "ExtractPerson", path: "priv/baml_src"})
 {:ok, response, _ctx} = Strider.call(agent, "John is 30 years old")
 # response.content => %{name: "John", age: 30}
 ```
@@ -297,7 +296,7 @@ defmodule MyApp.Baml do
   use BamlElixir.Client, path: "priv/baml_src"
 end
 
-agent = Strider.Agent.new({:baml, function: "ExtractPerson", path: "priv/baml_src", prefix: MyApp.Baml})
+agent = Strider.Agent.new({Strider.Backends.Baml, function: "ExtractPerson", path: "priv/baml_src", prefix: MyApp.Baml})
 {:ok, response, _ctx} = Strider.call(agent, "Alice is 25")
 # response.content => %MyApp.Baml.Person{name: "Alice", age: 25}
 ```
@@ -323,7 +322,7 @@ schema = Zoi.union([
   |> Zoi.transform(fn data -> struct!(Done, data) end)
 ])
 
-agent = Strider.Agent.new({:baml, function: "ClassifyIntent", path: "priv/baml_src"})
+agent = Strider.Agent.new({Strider.Backends.Baml, function: "ClassifyIntent", path: "priv/baml_src"})
 {:ok, response, _ctx} = Strider.call(agent, "Get system info", Strider.Context.new(), output_schema: schema)
 # response.content => %GetSystemInfo{intent: "get_system_info"} or %Done{...}
 ```
@@ -338,7 +337,7 @@ When `output_schema` is provided, BAML returns raw maps which are then parsed th
 BAML supports classes, arrays, maps, and unions as function parameters. Use `:args_format` and `:args` to pass structured data:
 
 ```elixir
-agent = Strider.Agent.new({:baml,
+agent = Strider.Agent.new({Strider.Backends.Baml,
   function: "EvaluateCar",
   path: "priv/baml_src",
   args_format: :raw,
@@ -353,7 +352,7 @@ See `Strider.Backends.Baml` moduledoc for full options.
 Switch between pre-defined BAML clients at runtime via `:llm_client`:
 
 ```elixir
-agent = Strider.Agent.new({:baml,
+agent = Strider.Agent.new({Strider.Backends.Baml,
   function: "ExtractPerson",
   path: "priv/baml_src",
   llm_client: "Ollama"  # or "Anthropic", "OpenAI", etc.
