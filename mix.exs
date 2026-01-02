@@ -110,10 +110,6 @@ defmodule Strider.MixProject do
           Strider.Prompt.Solid,
           Strider.Prompt.Sigils
         ],
-        "Schema Validation": [
-          Strider.Schema,
-          Strider.Schema.Zoi
-        ],
         Telemetry: [
           Strider.Telemetry
         ],

@@ -35,7 +35,7 @@ def deps do
     {:req_llm, "~> 1.0"},     # optional, for Strider.Backends.ReqLLM
     {:solid, "~> 0.15"},      # optional, for Strider.Prompt.Solid
     {:telemetry, "~> 1.2"},   # optional, for Strider.Telemetry
-    {:zoi, "~> 0.7"}          # optional, for Strider.Schema.Zoi
+    {:zoi, "~> 0.7"}          # optional, for schema validation
   ]
 end
 ```
@@ -260,10 +260,8 @@ prompt = ~P"Hello {{ name }}!"
 ## Schema Validation
 
 ```elixir
-alias Strider.Schema.Zoi, as: Schema
-
-schema = Schema.object(%{name: Schema.string(), age: Schema.integer()})
-{:ok, result} = Schema.parse(schema, %{name: "Alice", age: 30})
+schema = Zoi.object(%{name: Zoi.string(), age: Zoi.integer()})
+{:ok, result} = Zoi.parse(schema, %{name: "Alice", age: 30})
 ```
 
 ## BAML (Structured LLM Functions)

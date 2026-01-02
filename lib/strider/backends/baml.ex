@@ -7,14 +7,15 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     alias Strider.{Message, Response}
 
     @impl true
-    def call(config, messages, _opts) do
+    def call(config, messages, opts) do
       function_name = Map.fetch!(config, :function)
       args = build_args(messages, config)
       baml_opts = build_baml_opts(config)
+      output_schema = Keyword.get(opts, :output_schema)
 
       case BamlElixir.Client.call(function_name, args, baml_opts) do
         {:ok, result} ->
-          {:ok, build_response(result, config)}
+          {:ok, build_response(result, config, output_schema)}
 
         {:error, reason} ->
           {:error, reason}
@@ -118,9 +119,11 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     defp maybe_put(map, _key, nil), do: map
     defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-    defp build_response(result, config) do
+    defp build_response(result, config, output_schema) do
+      content = maybe_parse_schema(output_schema, result)
+
       Response.new(
-        content: result,
+        content: content,
         finish_reason: :stop,
         usage: %{},
         metadata: %{
@@ -130,6 +133,15 @@ if Code.ensure_loaded?(BamlElixir.Client) do
         }
       )
     end
+
+    defp maybe_parse_schema(%Zoi.Types.Struct{} = schema, result) when is_map(result) do
+      case Zoi.parse(schema, result) do
+        {:ok, parsed} -> parsed
+        {:error, _} -> result
+      end
+    end
+
+    defp maybe_parse_schema(_schema, result), do: result
 
     defp start_stream(caller, ref, function_name, args, opts) do
       spawn_link(fn ->

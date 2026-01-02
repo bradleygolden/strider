@@ -37,11 +37,9 @@ defmodule Strider.Backend do
 
   Example with structured output (requires `:zoi` dep):
 
-      alias Strider.Schema.Zoi, as: Schema
-
-      output_schema = Schema.object(%{
-        name: Schema.string(),
-        age: Schema.integer()
+      output_schema = Zoi.object(%{
+        name: Zoi.string(),
+        age: Zoi.integer()
       })
 
       {:ok, response, context} = Strider.call(agent, prompt, context,
