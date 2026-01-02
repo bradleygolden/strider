@@ -67,6 +67,7 @@ defmodule Strider.Sandbox.Adapters.Test do
   end
 
   defp register_sandbox(sandbox_id, agent_name) do
+    ensure_ets_table()
     :ets.insert(__MODULE__, {sandbox_id, agent_name})
   end
 
