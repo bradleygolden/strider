@@ -317,6 +317,20 @@ agent = Strider.Agent.new({:baml,
 
 See `Strider.Backends.Baml` moduledoc for full options.
 
+### Runtime Client Switching
+
+Switch between pre-defined BAML clients at runtime via `:llm_client`:
+
+```elixir
+agent = Strider.Agent.new({:baml,
+  function: "ExtractPerson",
+  path: "priv/baml_src",
+  llm_client: "Ollama"  # or "Anthropic", "OpenAI", etc.
+})
+```
+
+Define multiple clients in your `.baml` files and select based on environment or config.
+
 ## Sandbox Execution
 
 Sandboxes provide isolated code execution with **no network access by default**.
