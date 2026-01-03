@@ -315,6 +315,39 @@ defmodule StriderTest do
     end
   end
 
+  describe "usage tracking" do
+    test "accumulates usage from single call" do
+      agent = Agent.new({Strider.Backends.Mock, response: "Hello!"})
+      context = Context.new()
+
+      {:ok, _response, updated_context} = Strider.call(agent, "Hi!", context)
+
+      usage = Context.usage(updated_context)
+      assert usage.input_tokens == 10
+      assert usage.output_tokens > 0
+      assert Context.total_tokens(updated_context) > 10
+    end
+
+    test "accumulates usage across multiple calls" do
+      agent = Agent.new({Strider.Backends.Mock, response: "Reply"})
+      context = Context.new()
+
+      {:ok, _response1, context} = Strider.call(agent, "First", context)
+      {:ok, _response2, context} = Strider.call(agent, "Second", context)
+
+      usage = Context.usage(context)
+      assert usage.input_tokens == 20
+      assert usage.output_tokens > 0
+    end
+
+    test "usage starts at zero for new context" do
+      context = Context.new()
+
+      assert Context.usage(context) == %{input_tokens: 0, output_tokens: 0}
+      assert Context.total_tokens(context) == 0
+    end
+  end
+
   describe "Agent.new/1 API styles" do
     test "tuple as first argument" do
       agent = Agent.new({Strider.Backends.ReqLLM, "anthropic:claude-sonnet-4-5"})

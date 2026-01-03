@@ -25,10 +25,11 @@ defmodule Strider.Context do
 
   @type t :: %__MODULE__{
           messages: [Message.t()],
-          metadata: map()
+          metadata: map(),
+          usage: map()
         }
 
-  defstruct messages: [], metadata: %{}
+  defstruct messages: [], metadata: %{}, usage: %{input_tokens: 0, output_tokens: 0}
 
   @doc """
   Creates a new empty context.
@@ -161,5 +162,33 @@ defmodule Strider.Context do
   @spec clear(t()) :: t()
   def clear(%__MODULE__{} = context) do
     %{context | messages: []}
+  end
+
+  @doc """
+  Returns the accumulated usage for the context.
+
+  ## Examples
+
+      iex> context = Strider.Context.new()
+      iex> Strider.Context.usage(context)
+      %{input_tokens: 0, output_tokens: 0}
+
+  """
+  @spec usage(t()) :: map()
+  def usage(%__MODULE__{usage: usage}), do: usage
+
+  @doc """
+  Returns the total number of tokens used in the context.
+
+  ## Examples
+
+      iex> context = Strider.Context.new()
+      iex> Strider.Context.total_tokens(context)
+      0
+
+  """
+  @spec total_tokens(t()) :: non_neg_integer()
+  def total_tokens(%__MODULE__{usage: usage}) do
+    Map.get(usage, :input_tokens, 0) + Map.get(usage, :output_tokens, 0)
   end
 end

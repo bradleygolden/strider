@@ -11,6 +11,7 @@ defmodule Strider.Backends.Mock do
 
   - `:response` - The response to return (default: "Mock response")
   - `:stream_chunks` - List of chunks for streaming (default: splits response)
+  - `:stream_usage` - Usage map emitted as a final stream chunk
   - `:delay` - Optional delay in milliseconds before responding
   - `:error` - If set, returns this error instead of a response
   - `:finish_reason` - The finish reason to return (default: :stop)
@@ -60,9 +61,11 @@ defmodule Strider.Backends.Mock do
         chunks = get_stream_chunks(config)
 
         stream =
-          Stream.map(chunks, fn chunk ->
+          chunks
+          |> Stream.map(fn chunk ->
             %{content: chunk, metadata: %{}}
           end)
+          |> maybe_append_stream_usage(Map.get(config, :stream_usage))
 
         {:ok, stream}
 
@@ -127,4 +130,12 @@ defmodule Strider.Backends.Mock do
       delay when is_integer(delay) -> Process.sleep(delay)
     end
   end
+
+  defp maybe_append_stream_usage(stream, usage) when is_map(usage) do
+    Stream.concat(stream, [
+      %{content: "", metadata: %{usage: usage, usage_stage: :final}}
+    ])
+  end
+
+  defp maybe_append_stream_usage(stream, _usage), do: stream
 end

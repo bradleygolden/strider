@@ -1,4 +1,4 @@
-if Code.ensure_loaded?(BamlElixir.Client) do
+if Code.ensure_loaded?(BamlElixir) do
   defmodule Strider.Backends.Baml do
     @moduledoc false
 
@@ -14,9 +14,12 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       backend_opts = Keyword.get(opts, :backend_opts, [])
       baml_opts = build_baml_opts(config, output_schema, backend_opts)
 
+      {collector, baml_opts} = maybe_add_collector(baml_opts)
+
       case BamlElixir.Client.call(function_name, args, baml_opts) do
         {:ok, result} ->
-          {:ok, build_response(result, config, output_schema)}
+          usage = get_collector_usage(collector)
+          {:ok, build_response(result, config, output_schema, usage)}
 
         {:error, reason} ->
           {:error, reason}
@@ -29,13 +32,14 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       args = build_args(messages, config)
       backend_opts = Keyword.get(opts, :backend_opts, [])
       baml_opts = build_baml_opts(config, nil, backend_opts)
+      {collector, baml_opts} = maybe_add_collector(baml_opts)
       caller = self()
       ref = make_ref()
 
       stream =
         Stream.resource(
           fn -> start_stream(caller, ref, function_name, args, baml_opts) end,
-          fn state -> receive_chunks(state, ref) end,
+          fn state -> receive_chunks(state, ref, collector) end,
           fn _state -> :ok end
         )
 
@@ -127,13 +131,13 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       end
     end
 
-    defp build_response(result, config, output_schema) do
+    defp build_response(result, config, output_schema, usage) do
       content = maybe_parse_schema(output_schema, result)
 
       Response.new(
         content: content,
         finish_reason: :stop,
-        usage: %{},
+        usage: usage,
         metadata: %{
           provider: "baml",
           function: Map.get(config, :function),
@@ -150,6 +154,26 @@ if Code.ensure_loaded?(BamlElixir.Client) do
     end
 
     defp maybe_parse_schema(_schema, result), do: result
+
+    defp maybe_add_collector(baml_opts) do
+      collector = BamlElixir.Collector.new("strider")
+      opts = Map.update(baml_opts, :collectors, [collector], &[collector | &1])
+      {collector, opts}
+    end
+
+    defp get_collector_usage(collector) do
+      case BamlElixir.Collector.usage(collector) do
+        usage when is_map(usage) -> normalize_usage(usage)
+        _ -> %{}
+      end
+    end
+
+    defp normalize_usage(usage) do
+      %{
+        input_tokens: Map.get(usage, :input_tokens, 0),
+        output_tokens: Map.get(usage, :output_tokens, 0)
+      }
+    end
 
     defp start_stream(caller, ref, function_name, args, opts) do
       spawn_link(fn ->
@@ -173,18 +197,24 @@ if Code.ensure_loaded?(BamlElixir.Client) do
       :streaming
     end
 
-    defp receive_chunks(:done, _ref) do
+    defp receive_chunks(:done, _ref, _collector) do
       {:halt, :done}
     end
 
-    defp receive_chunks(:streaming, ref) do
+    defp receive_chunks(:streaming, ref, collector) do
       receive do
         {^ref, {:chunk, result}} ->
           chunk = %{content: result, metadata: %{partial: true}}
           {[chunk], :streaming}
 
         {^ref, {:done, result}} ->
-          chunk = %{content: result, metadata: %{partial: false}}
+          usage = get_collector_usage(collector)
+
+          chunk = %{
+            content: result,
+            metadata: %{partial: false, usage: usage, usage_stage: :final}
+          }
+
           {[chunk], :done}
 
         {^ref, {:error, reason}} ->

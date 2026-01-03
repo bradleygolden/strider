@@ -147,6 +147,21 @@ defmodule Strider.Runtime do
     context
     |> Context.add_message(:user, user_content)
     |> Context.add_message(:assistant, response.content, response.metadata)
+    |> accumulate_usage(response)
+  end
+
+  defp accumulate_usage(context, %Response{usage: nil}), do: context
+  defp accumulate_usage(context, %Response{usage: usage}) when map_size(usage) == 0, do: context
+
+  defp accumulate_usage(context, %Response{usage: usage}) do
+    current = context.usage
+
+    updated = %{
+      input_tokens: Map.get(current, :input_tokens, 0) + Map.get(usage, :input_tokens, 0),
+      output_tokens: Map.get(current, :output_tokens, 0) + Map.get(usage, :output_tokens, 0)
+    }
+
+    %{context | usage: updated}
   end
 
   defp build_messages(agent, content, context) do
