@@ -46,6 +46,10 @@ if Code.ensure_loaded?(:telemetry) do
       - Measurements: `%{}`
       - Metadata: `%{agent: Agent.t(), chunk: map(), context: Context.t()}`
 
+    - `[:strider, :stream, :usage]` - When a stream chunk includes usage
+      - Measurements: `%{input_tokens: integer, output_tokens: integer}`
+      - Metadata: `%{agent: Agent.t(), context: Context.t(), usage_stage: :partial | :final}`
+
     - `[:strider, :stream, :stop]` - When streaming completes
       - Measurements: `%{system_time: integer}`
       - Metadata: `%{agent: Agent.t(), context: Context.t()}`
@@ -93,6 +97,7 @@ if Code.ensure_loaded?(:telemetry) do
         [:strider, :call, :error],
         [:strider, :stream, :start],
         [:strider, :stream, :chunk],
+        [:strider, :stream, :usage],
         [:strider, :stream, :stop],
         [:strider, :backend, :request],
         [:strider, :backend, :response]

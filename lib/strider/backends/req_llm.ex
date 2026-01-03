@@ -124,7 +124,9 @@ if Code.ensure_loaded?(ReqLLM) do
               %{content: text, metadata: %{backend: :req_llm}}
             end)
 
-          {:ok, text_stream}
+          usage_stream = stream_usage_stream(stream_response)
+
+          {:ok, Stream.concat(text_stream, usage_stream)}
 
         {:error, reason} ->
           {:error, reason}
@@ -267,6 +269,38 @@ if Code.ensure_loaded?(ReqLLM) do
     end
 
     defp normalize_usage(_), do: %{}
+
+    defp stream_usage_stream(stream_response) do
+      Stream.resource(
+        fn -> :pending end,
+        fn
+          :pending ->
+            case stream_usage(stream_response) do
+              nil ->
+                {:halt, :done}
+
+              usage ->
+                {[
+                   %{
+                     content: "",
+                     metadata: %{backend: :req_llm, usage: usage, usage_stage: :final}
+                   }
+                 ], :done}
+            end
+
+          :done ->
+            {:halt, :done}
+        end,
+        fn _ -> :ok end
+      )
+    end
+
+    defp stream_usage(stream_response) do
+      case ReqLLM.StreamResponse.usage(stream_response) do
+        usage when is_map(usage) and map_size(usage) > 0 -> normalize_usage(usage)
+        _ -> nil
+      end
+    end
 
     # Convert Strider.Message → ReqLLM message format
     # Single text → use plain map with string content (loose map)

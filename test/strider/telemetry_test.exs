@@ -92,6 +92,32 @@ if Code.ensure_loaded?(:telemetry) do
         assert EventTracker.has_event?([:strider, :stream, :chunk])
         assert EventTracker.has_event?([:strider, :stream, :stop])
       end
+
+      test "emits stream usage event when chunk includes usage" do
+        agent =
+          Agent.new(
+            {Strider.Backends.Mock,
+             stream_chunks: ["Hello"], stream_usage: %{input_tokens: 1, output_tokens: 2}},
+            hooks: Strider.Telemetry.Hooks
+          )
+
+        context = Context.new()
+
+        {:ok, stream, _context} = Strider.stream(agent, "Hi!", context)
+
+        _chunks = Enum.to_list(stream)
+
+        assert EventTracker.has_event?([:strider, :stream, :usage])
+
+        {_, measurements, metadata} =
+          EventTracker.events()
+          |> Enum.find(fn {event, _, _} -> event == [:strider, :stream, :usage] end)
+
+        assert measurements == %{input_tokens: 1, output_tokens: 2}
+        assert metadata.usage_stage == :final
+        assert %Agent{} = metadata.agent
+        assert %Context{} = metadata.context
+      end
     end
 
     describe "Strider.Telemetry.event_names/0" do
@@ -103,6 +129,7 @@ if Code.ensure_loaded?(:telemetry) do
         assert [:strider, :call, :error] in names
         assert [:strider, :stream, :start] in names
         assert [:strider, :stream, :chunk] in names
+        assert [:strider, :stream, :usage] in names
         assert [:strider, :stream, :stop] in names
         assert [:strider, :backend, :request] in names
         assert [:strider, :backend, :response] in names

@@ -136,4 +136,32 @@ defmodule Strider.ContextTest do
       assert Context.get_metadata(context, :missing, "default") == "default"
     end
   end
+
+  describe "usage/1" do
+    test "returns default usage for new context" do
+      context = Context.new()
+
+      assert Context.usage(context) == %{input_tokens: 0, output_tokens: 0}
+    end
+
+    test "returns accumulated usage" do
+      context = %{Context.new() | usage: %{input_tokens: 100, output_tokens: 50}}
+
+      assert Context.usage(context) == %{input_tokens: 100, output_tokens: 50}
+    end
+  end
+
+  describe "total_tokens/1" do
+    test "returns 0 for new context" do
+      context = Context.new()
+
+      assert Context.total_tokens(context) == 0
+    end
+
+    test "returns sum of input and output tokens" do
+      context = %{Context.new() | usage: %{input_tokens: 100, output_tokens: 50}}
+
+      assert Context.total_tokens(context) == 150
+    end
+  end
 end

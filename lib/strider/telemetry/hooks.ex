@@ -74,6 +74,20 @@ if Code.ensure_loaded?(:telemetry) do
         %{},
         %{agent: agent, chunk: chunk, context: context}
       )
+
+      usage = get_in(chunk, [:metadata, :usage])
+
+      if is_map(usage) do
+        :telemetry.execute(
+          [:strider, :stream, :usage],
+          usage,
+          %{
+            usage_stage: get_in(chunk, [:metadata, :usage_stage]) || :partial,
+            agent: agent,
+            context: context
+          }
+        )
+      end
     end
 
     @impl true
