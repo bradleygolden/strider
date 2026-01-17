@@ -45,6 +45,7 @@ defmodule Strider.MixProject do
       {:req_llm, "~> 1.0", optional: true},
       {:solid, "~> 0.15", optional: true},
       {:telemetry, "~> 1.2", optional: true},
+      {:toml, "~> 0.7", optional: true},
       {:zoi, "~> 0.7", optional: true},
       {:ex_doc, "~> 0.34", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -115,6 +116,7 @@ defmodule Strider.MixProject do
         ],
         Sandbox: [
           Strider.Sandbox,
+          Strider.Sandbox.Runner,
           Strider.Sandbox.Adapter,
           Strider.Sandbox.Template,
           Strider.Sandbox.Instance,
@@ -132,6 +134,12 @@ defmodule Strider.MixProject do
         ],
         Proxy: [
           Strider.Proxy.Sandbox
+        ],
+        "Fly Infrastructure": [
+          Strider.Fly.Infrastructure.Config,
+          Strider.Fly.Infrastructure.State,
+          Strider.Fly.Infrastructure.Plan,
+          Strider.Fly.Infrastructure.Executor
         ]
       ]
     ]

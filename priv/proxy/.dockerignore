@@ -1,0 +1,16 @@
+# Git
+.git
+.gitignore
+
+# Elixir/Mix
+_build
+deps
+*.ez
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db

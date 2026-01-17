@@ -1,5 +1,5 @@
 defmodule Strider.Sandbox.TemplateTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Strider.Sandbox
   alias Strider.Sandbox.Adapters.Test, as: TestAdapter

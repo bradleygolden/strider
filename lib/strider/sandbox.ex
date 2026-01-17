@@ -8,6 +8,8 @@ defmodule Strider.Sandbox do
 
   ## Usage
 
+  ### Direct API
+
       alias Strider.Sandbox.Adapters.Docker
 
       # Create a sandbox
@@ -19,6 +21,32 @@ defmodule Strider.Sandbox do
 
       # Cleanup
       :ok = Strider.Sandbox.terminate(sandbox)
+
+  ### Module-based API (Recommended)
+
+  For a simpler, DBConnection-style experience:
+
+      defmodule MySandbox do
+        use Strider.Sandbox,
+          adapter: Strider.Sandbox.Adapters.Fly,
+          pool_size: 5,
+          adapter_opts: [app_name: "my-sandboxes"]
+      end
+
+      # Add to supervision tree
+      children = [MySandbox]
+
+      # Stateless - ephemeral sandbox from pool
+      {:ok, result} = MySandbox.run("echo hello")
+
+      # Session-based - persistent sandbox + volume
+      {:ok, result} = MySandbox.run("echo hello", session: "user-123")
+
+      # Multi-step transaction
+      {:ok, output} = MySandbox.transaction(fn sandbox ->
+        :ok = Strider.Sandbox.write_file(sandbox, "/app/script.py", code)
+        Strider.Sandbox.exec(sandbox, "python /app/script.py")
+      end, session: "user-123")
 
   ## Adapters
 
@@ -34,9 +62,123 @@ defmodule Strider.Sandbox do
   alias Strider.Sandbox.HealthPoller
   alias Strider.Sandbox.Instance
   alias Strider.Sandbox.NDJSON
+  alias Strider.Sandbox.Runner
   alias Strider.Sandbox.Template
 
   @type backend :: {module(), map() | keyword()}
+
+  @doc """
+  Defines a sandbox module with pool management and session support.
+
+  ## Options
+
+  - `:adapter` - The sandbox adapter module (required)
+  - `:adapter_opts` - Options passed to the adapter (default: [])
+  - `:pool_size` - Number of warm sandboxes in stateless pool (default: 5)
+  - `:default_region` - Default region for sessions (default: "sjc")
+  - `:session_volume` - Volume config for session sandboxes (default: nil)
+
+  ## Example
+
+      defmodule MySandbox do
+        use Strider.Sandbox,
+          adapter: Strider.Sandbox.Adapters.Fly,
+          pool_size: 5,
+          default_region: "sjc",
+          adapter_opts: [
+            app_name: "my-sandboxes",
+            api_token: {:system, "FLY_API_TOKEN"}
+          ],
+          session_volume: %{name: "workspace", path: "/workspace", size_gb: 5}
+      end
+
+  This generates the following functions:
+
+  - `child_spec/1` - For supervision tree
+  - `start_link/1` - Starts the runner GenServer
+  - `run/2` - Execute single command
+  - `run!/2` - Execute single command, raises on error
+  - `transaction/2` - Execute multiple operations
+  - `transaction!/2` - Execute multiple operations, raises on error
+  - `end_session/2` - Terminate a session's sandbox
+  """
+  defmacro __using__(opts) do
+    quote do
+      @sandbox_opts unquote(opts)
+
+      def child_spec(init_arg) do
+        %{
+          id: __MODULE__,
+          start: {__MODULE__, :start_link, [init_arg]},
+          type: :worker
+        }
+      end
+
+      def start_link(opts \\ []) do
+        merged = Keyword.merge(@sandbox_opts, opts)
+        Runner.start_link(__MODULE__, merged)
+      end
+
+      @doc """
+      Executes a command in a sandbox.
+
+      ## Options
+
+      - `:session` - Session ID for persistent sandbox (optional)
+      - `:region` - Region for session (default: configured default)
+      - `:timeout` - Command timeout in ms (default: 30_000)
+      """
+      def run(command, opts \\ []) do
+        Runner.run(__MODULE__, command, opts)
+      end
+
+      @doc """
+      Executes a command in a sandbox, raises on error.
+      """
+      def run!(command, opts \\ []) do
+        case run(command, opts) do
+          {:ok, result} -> result
+          {:error, reason} -> raise "Sandbox run failed: #{inspect(reason)}"
+        end
+      end
+
+      @doc """
+      Executes multiple operations in a sandbox.
+
+      The function receives a `Strider.Sandbox.Instance` and can call
+      any sandbox functions on it.
+
+      ## Options
+
+      Same as `run/2`.
+      """
+      def transaction(fun, opts \\ []) when is_function(fun, 1) do
+        Runner.transaction(__MODULE__, fun, opts)
+      end
+
+      @doc """
+      Executes multiple operations in a sandbox, raises on error.
+      """
+      def transaction!(fun, opts \\ []) when is_function(fun, 1) do
+        case transaction(fun, opts) do
+          {:ok, result} -> result
+          {:error, reason} -> raise "Sandbox transaction failed: #{inspect(reason)}"
+        end
+      end
+
+      @doc """
+      Ends a session, terminating its sandbox.
+
+      ## Options
+
+      - `:delete_volume` - Also delete the volume (default: false)
+      """
+      def end_session(session_id, opts \\ []) do
+        Runner.end_session(__MODULE__, session_id, opts)
+      end
+    end
+  end
+
   @type text_block :: %{type: :text, text: String.t()}
   @type file_block ::
           %{type: :file, media_type: String.t(), data: String.t()}
@@ -149,6 +291,27 @@ defmodule Strider.Sandbox do
   @spec terminate(Instance.t()) :: :ok | {:error, term()}
   def terminate(%Instance{} = sandbox) do
     sandbox.adapter.terminate(sandbox.id, merge_opts(sandbox.config, []))
+  end
+
+  @doc """
+  Deletes volumes associated with the sandbox.
+
+  Reads volume IDs from the sandbox's metadata (`:created_volumes` key)
+  and deletes them via the adapter. Only works with adapters that
+  implement the `delete_volumes/2` callback.
+
+  Returns `:ok` if the adapter doesn't support volume deletion or if
+  there are no volumes to delete.
+  """
+  @spec delete_volumes(Instance.t()) :: :ok | {:error, term()}
+  def delete_volumes(%Instance{} = sandbox) do
+    volume_ids = Map.get(sandbox.metadata, :created_volumes, [])
+
+    if volume_ids == [] or not function_exported?(sandbox.adapter, :delete_volumes, 2) do
+      :ok
+    else
+      sandbox.adapter.delete_volumes(volume_ids, merge_opts(sandbox.config, []))
+    end
   end
 
   @doc """

@@ -33,6 +33,7 @@ def deps do
     {:plug, "~> 1.15"},       # optional, for Strider.Proxy.Sandbox
     {:req, "~> 0.5"},         # optional, for Strider.Sandbox.Adapters.Fly
     {:req_llm, "~> 1.0"},     # optional, for Strider.Backends.ReqLLM
+    {:toml, "~> 0.7"},        # optional, for Fly infrastructure deployment
     {:solid, "~> 0.15"},      # optional, for Strider.Prompt.Solid
     {:telemetry, "~> 1.2"},   # optional, for Strider.Telemetry
     {:zoi, "~> 0.7"}          # optional, for schema validation
@@ -426,6 +427,68 @@ Enable controlled network access through a proxy (see [Sandbox Proxy](#sandbox-p
 {:ok, sandbox} = Sandbox.create({Docker, %{proxy: [ip: "172.17.0.1", port: 4000]}})
 ```
 
+## Managed Sandboxes
+
+For simpler sandbox management, use `use Strider.Sandbox` to define a module that handles pools and sessions automatically:
+
+```elixir
+defmodule MySandbox do
+  use Strider.Sandbox,
+    adapter: Strider.Sandbox.Adapters.Fly,
+    adapter_opts: [
+      app_name: "my-sandboxes",
+      api_token: {:system, "FLY_API_TOKEN"}
+    ],
+    pool_size: 5,
+    default_region: "sjc",
+    session_volume: %{name: "workspace", path: "/workspace", size_gb: 5}
+end
+```
+
+Add to your supervision tree:
+
+```elixir
+children = [MySandbox]
+```
+
+### Stateless Mode
+
+Run commands in ephemeral sandboxes from a warm pool:
+
+```elixir
+{:ok, result} = MySandbox.run("python -c 'print(1+1)'")
+# result.stdout => "2\n"
+```
+
+### Session Mode
+
+Persistent sandbox with volume - data persists across calls:
+
+```elixir
+# First call - creates sandbox + volume for this session
+{:ok, _} = MySandbox.run("echo 'hello' > /workspace/state.txt", session: "user-123")
+
+# Second call - same sandbox, data persists
+{:ok, result} = MySandbox.run("cat /workspace/state.txt", session: "user-123")
+# result.stdout => "hello\n"
+
+# End session - terminate sandbox, optionally delete volume
+:ok = MySandbox.end_session("user-123")
+:ok = MySandbox.end_session("user-123", delete_volume: true)
+```
+
+### Transactions
+
+Execute multiple operations in the same sandbox:
+
+```elixir
+{:ok, output} = MySandbox.transaction(fn sandbox ->
+  :ok = Strider.Sandbox.write_file(sandbox, "/workspace/script.py", code)
+  {:ok, result} = Strider.Sandbox.exec(sandbox, "python /workspace/script.py")
+  result.stdout
+end, session: "user-123")
+```
+
 Fly.io adapter for production:
 
 ```elixir
@@ -471,6 +534,162 @@ Pool.start_link(%{
   store_config: %{repo: MyApp.Repo}
 })
 ```
+
+## Deploy to Fly.io
+
+Deploy and manage Fly.io infrastructure for self-hosted sandboxes.
+
+### Prerequisites
+
+1. A [Fly.io account](https://fly.io) with an organization
+2. Install the [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) (optional, for advanced management)
+3. Create an API token at [fly.io/user/personal_access_tokens](https://fly.io/user/personal_access_tokens)
+
+### Quick Start
+
+```bash
+# 1. Generate config file
+mix strider.fly.init
+
+# 2. Edit strider.fly.toml with your settings
+#    - Set your org slug
+#    - Choose an app name (must be globally unique)
+
+# 3. Set your API token
+export FLY_API_TOKEN=your_token_here
+
+# 4. Preview what will be created
+mix strider.fly.plan
+
+# 5. Deploy infrastructure
+mix strider.fly.deploy
+```
+
+### Configuration
+
+The `strider.fly.toml` file defines your infrastructure:
+
+```toml
+[fly]
+org = "my-org"                    # Your Fly.io organization slug
+
+[app]
+name = "my-sandboxes"             # Globally unique app name
+regions = ["sjc"]                 # Fly regions to deploy to
+
+[network]
+enabled = true                    # Enable 6PN private network isolation
+name = "my-sandbox-network"       # Network name
+
+[volumes.workspace]               # Optional: pre-provision volumes
+size_gb = 10
+regions = ["sjc"]
+count_per_region = 2
+
+[sandbox]
+image = "ghcr.io/bradleygolden/strider-sandbox:latest"
+memory_mb = 256
+cpu = 1
+cpu_kind = "shared"               # "shared" or "performance"
+auto_destroy = false              # Keep for pool management
+
+[proxy]                           # Optional: deploy proxy app
+enabled = false
+app_name = "my-sandbox-proxy"
+port = 4000
+allowed_domains = ["api.anthropic.com"]
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `mix strider.fly.init` | Generate config template |
+| `mix strider.fly.plan` | Preview changes without applying |
+| `mix strider.fly.deploy` | Create/update infrastructure |
+| `mix strider.fly.status` | Show current infrastructure state |
+| `mix strider.fly.destroy` | Tear down all infrastructure |
+
+### Using Deployed Infrastructure
+
+Once deployed, configure your application to use the Fly adapter:
+
+```elixir
+alias Strider.Sandbox
+alias Strider.Sandbox.Adapters.Fly
+
+# Create sandboxes in your deployed infrastructure
+{:ok, sandbox} = Sandbox.create({Fly, %{
+  app_name: "my-sandboxes",       # Must match your config
+  region: "sjc",
+  api_token: System.get_env("FLY_API_TOKEN")
+}})
+
+{:ok, _metadata} = Sandbox.await_ready(sandbox, port: 4001)
+{:ok, result} = Sandbox.exec(sandbox, "python3 -c 'print(1+1)'")
+Sandbox.terminate(sandbox)
+```
+
+### With Sandbox Pool
+
+For production, combine with the Sandbox Pool for pre-warmed instances:
+
+```elixir
+alias Strider.Sandbox.Pool
+alias Strider.Sandbox.Adapters.Fly
+
+{:ok, pool} = Pool.start_link(%{
+  adapter: Fly,
+  partitions: ["sjc"],
+  target_per_partition: 2,
+  build_config: fn region ->
+    %{
+      app_name: "my-sandboxes",
+      region: region,
+      api_token: System.get_env("FLY_API_TOKEN")
+    }
+  end,
+  health_port: 4001
+})
+
+# Checkout a pre-warmed sandbox (~10s start vs ~60s cold)
+case Pool.checkout(pool, "sjc") do
+  {:warm, sandbox_info} ->
+    sandbox = Sandbox.from_id(Fly, sandbox_info.sandbox_id,
+      %{api_token: System.get_env("FLY_API_TOKEN")},
+      sandbox_info.metadata)
+    Sandbox.start(sandbox)
+
+  {:cold, :pool_empty} ->
+    # Fall back to cold start
+    Sandbox.create({Fly, %{app_name: "my-sandboxes", region: "sjc"}})
+end
+```
+
+### CI/CD Deployment
+
+Use `--auto-approve` for non-interactive deployments:
+
+```bash
+mix strider.fly.deploy --auto-approve
+```
+
+### Teardown
+
+To destroy all infrastructure:
+
+```bash
+# Preview what will be deleted
+mix strider.fly.plan
+
+# Destroy (requires confirmation)
+mix strider.fly.destroy
+
+# Force destroy without confirmation
+mix strider.fly.destroy --force
+```
+
+**Warning**: Destruction is permanent and cannot be undone.
 
 ## Sandbox Proxy
 
